@@ -28,6 +28,9 @@ nul
 logs/
 *.log
 
+# Claude Code
+.claude/
+
 # Temporary files
 *.tmp
 *.temp
