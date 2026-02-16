@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 서비스 식별자 -->
+    <key>Label</key>
+    <string>com.bluevlad.auto-tobe-agent</string>
+
+    <!-- 실행할 스크립트 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/bluevlad/GIT/Auto-Tobe-Agent/scripts/run-batch.sh</string>
+    </array>
+
+    <!-- 실행 스케줄: 매일 09:00, 14:00, 20:00 -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>14</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>20</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+    </array>
+
+    <!-- 작업 디렉토리 -->
+    <key>WorkingDirectory</key>
+    <string>/Users/bluevlad/GIT/Auto-Tobe-Agent</string>
+
+    <!-- 표준 출력/에러 로그 -->
+    <key>StandardOutPath</key>
+    <string>/Users/bluevlad/GIT/Auto-Tobe-Agent/logs/launchd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/bluevlad/GIT/Auto-Tobe-Agent/logs/launchd-stderr.log</string>
+
+    <!-- 환경 변수 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+        <key>AGENT_HOME</key>
+        <string>/Users/bluevlad/GIT/Auto-Tobe-Agent</string>
+        <key>HOME</key>
+        <string>/Users/bluevlad</string>
+    </dict>
+
+    <!-- 실패 시 재시도 안 함 (다음 스케줄에서 처리) -->
+    <key>StartInterval</key>
+    <false/>
+
+    <!-- 부팅 시 자동 로드 -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- 동시 실행 방지 -->
+    <key>AbandonProcessGroup</key>
+    <false/>
+</dict>
+</plist>
