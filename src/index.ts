@@ -4,18 +4,22 @@
  * QA Agent가 발견한 GitHub Issues를 자동으로 수정하는 Agent
  *
  * 사용법:
- *   npm start                          # 설정 로드 및 상태 표시
- *   npm start -- scan <project>        # 이슈 스캔 및 파싱
- *   npm start -- resolve <project>     # 프로젝트 상태 확인
+ *   npm start                              # 설정 로드 및 상태 표시
+ *   npm start -- scan <project>            # 이슈 스캔 및 파싱
+ *   npm start -- resolve <project>         # 프로젝트 상태 확인
+ *   npm start -- fix <project> <issue#>    # 단일 이슈 수정
+ *   npm start -- fix <project> --auto      # 자동 수정 가능한 이슈 일괄 수정
  */
 
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
-import type { ProjectsConfig, ApprovalPolicyConfig, Priority } from './types/index.js';
+import type { ProjectsConfig, ApprovalPolicyConfig, Priority, ParsedIssue, BatchFixResult } from './types/index.js';
 import { fetchOpenIssueNumbers, parseIssue, isParsedIssue, sortByPriority } from './issue-parser.js';
 import { resolveProject, resolveAllProjects } from './project-resolver.js';
+import { orchestrateFix, orchestrateBatchFix } from './fix-orchestrator.js';
+import { createPullRequest } from './pr-creator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -30,7 +34,7 @@ function loadConfig<T>(relativePath: string): T {
  * 기본 모드: 설정 로드 및 상태 표시
  */
 function showStatus(): void {
-  console.log('Auto-Tobe-Agent v0.2.0');
+  console.log('Auto-Tobe-Agent v0.3.0');
   console.log('='.repeat(50));
 
   const projects = loadConfig<ProjectsConfig>('configs/projects.json');
@@ -47,8 +51,10 @@ function showStatus(): void {
 
   console.log('='.repeat(50));
   console.log('\nCommands:');
-  console.log('  npm start -- scan <project>     이슈 스캔');
-  console.log('  npm start -- resolve <project>  프로젝트 상태');
+  console.log('  npm start -- scan <project>            이슈 스캔');
+  console.log('  npm start -- resolve <project>         프로젝트 상태');
+  console.log('  npm start -- fix <project> <issue#>    단일 이슈 수정');
+  console.log('  npm start -- fix <project> --auto      자동 일괄 수정');
 }
 
 /**
@@ -159,6 +165,163 @@ async function resolveProjectCommand(projectName?: string): Promise<void> {
 }
 
 /**
+ * fix 모드: 이슈를 수정합니다.
+ *
+ * @param projectName - 프로젝트명
+ * @param issueArg - 이슈 번호 또는 '--auto'
+ */
+async function fixIssues(projectName: string, issueArg: string): Promise<void> {
+  const project = await resolveProject(projectName);
+
+  if (issueArg === '--auto') {
+    // 자동 수정 가능한 이슈 일괄 처리
+    await fixAutoIssues(projectName, project);
+  } else {
+    // 단일 이슈 수정
+    const issueNumber = parseInt(issueArg, 10);
+    if (isNaN(issueNumber)) {
+      console.error(`Invalid issue number: ${issueArg}`);
+      process.exit(1);
+    }
+    await fixSingleIssue(projectName, project, issueNumber);
+  }
+}
+
+/**
+ * 단일 이슈 수정
+ */
+async function fixSingleIssue(
+  projectName: string,
+  project: Awaited<ReturnType<typeof resolveProject>>,
+  issueNumber: number,
+): Promise<void> {
+  console.log(`\n[fix] ${projectName} #${issueNumber} 수정 시작`);
+  console.log('='.repeat(50));
+
+  // 이슈 파싱
+  const parseResult = await parseIssue(issueNumber, project.config.repo);
+  if (!isParsedIssue(parseResult)) {
+    console.error(`Issue #${issueNumber} parse failed: ${parseResult.error}`);
+    process.exit(1);
+  }
+
+  // 수정 오케스트레이션
+  const fixResult = await orchestrateFix(parseResult, project);
+
+  // PR 생성 (수정 성공 시)
+  if (['build_verified', 'test_verified', 'fix_applied'].includes(fixResult.status)) {
+    const prResult = await createPullRequest(fixResult);
+    printFixSummary(prResult);
+  } else {
+    printFixSummary(fixResult);
+  }
+}
+
+/**
+ * 자동 수정 가능한 이슈 일괄 처리
+ */
+async function fixAutoIssues(
+  projectName: string,
+  project: Awaited<ReturnType<typeof resolveProject>>,
+): Promise<void> {
+  console.log(`\n[fix --auto] ${projectName} 자동 수정 시작`);
+  console.log('='.repeat(50));
+
+  // 이슈 스캔
+  const issueList = await fetchOpenIssueNumbers(project.config.repo);
+  const parsed: ParsedIssue[] = [];
+
+  for (const item of issueList) {
+    const result = await parseIssue(item.number, project.config.repo);
+    if (isParsedIssue(result) && result.isAutoFixable) {
+      parsed.push(result);
+    }
+  }
+
+  if (parsed.length === 0) {
+    console.log('  자동 수정 가능한 이슈 없음');
+    return;
+  }
+
+  const sorted = sortByPriority(parsed);
+  console.log(`  Auto-fixable issues: ${sorted.length}건`);
+  for (const issue of sorted) {
+    console.log(`    #${issue.number} [${issue.priority}] ${issue.title}`);
+  }
+
+  // 일괄 수정
+  const results = await orchestrateBatchFix(sorted, project);
+
+  // 성공한 건에 대해 PR 생성
+  for (let i = 0; i < results.length; i++) {
+    if (['build_verified', 'test_verified', 'fix_applied'].includes(results[i].status)) {
+      results[i] = await createPullRequest(results[i]);
+    }
+  }
+
+  // 최종 요약
+  printBatchSummary(results);
+}
+
+/**
+ * 단일 수정 결과 출력
+ */
+function printFixSummary(result: import('./types/index.js').FixResult): void {
+  console.log('\n' + '='.repeat(50));
+  console.log('FIX RESULT');
+  console.log('='.repeat(50));
+  console.log(`  Issue: #${result.issueNumber}`);
+  console.log(`  Status: ${result.status}`);
+  console.log(`  Branch: ${result.branchName ?? '-'}`);
+  console.log(`  Commit: ${result.commitHash?.substring(0, 8) ?? '-'}`);
+  console.log(`  PR: ${result.prUrl ?? '-'}`);
+  console.log(`  Files: ${result.modifiedFiles.length}`);
+  console.log(`  Retries: ${result.retryCount}`);
+  if (result.error) {
+    console.log(`  Error: ${result.error}`);
+  }
+  if (result.durationMs) {
+    console.log(`  Duration: ${(result.durationMs / 1000).toFixed(1)}s`);
+  }
+
+  for (const v of result.verifications) {
+    const icon = v.passed ? 'PASS' : 'FAIL';
+    console.log(`  [${icon}] ${v.type}: ${v.command} (${(v.durationMs / 1000).toFixed(1)}s)`);
+  }
+}
+
+/**
+ * 배치 수정 결과 출력
+ */
+function printBatchSummary(results: import('./types/index.js').FixResult[]): void {
+  const succeeded = results.filter((r) => r.status === 'pr_created' || r.status === 'test_verified' || r.status === 'build_verified');
+  const failed = results.filter((r) => r.status === 'failed');
+  const skipped = results.filter((r) => r.status === 'skipped');
+
+  console.log('\n' + '='.repeat(50));
+  console.log('BATCH FIX SUMMARY');
+  console.log('='.repeat(50));
+  console.log(`  Total: ${results.length}`);
+  console.log(`  Succeeded: ${succeeded.length}`);
+  console.log(`  Failed: ${failed.length}`);
+  console.log(`  Skipped: ${skipped.length}`);
+
+  if (succeeded.length > 0) {
+    console.log('\n  Succeeded:');
+    for (const r of succeeded) {
+      console.log(`    #${r.issueNumber} → ${r.prUrl ?? r.status}`);
+    }
+  }
+
+  if (failed.length > 0) {
+    console.log('\n  Failed:');
+    for (const r of failed) {
+      console.log(`    #${r.issueNumber}: ${r.error?.substring(0, 100)}`);
+    }
+  }
+}
+
+/**
  * 메인 엔트리포인트
  */
 async function main(): Promise<void> {
@@ -178,6 +341,14 @@ async function main(): Promise<void> {
 
       case 'resolve':
         await resolveProjectCommand(target);
+        break;
+
+      case 'fix':
+        if (!target || !args[2]) {
+          console.error('Usage: npm start -- fix <project> <issue#|--auto>');
+          process.exit(1);
+        }
+        await fixIssues(target, args[2]);
         break;
 
       default:
