@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "projects": {
+    "hopenvision": {
+      "repo": "bluevlad/hopenvision",
+      "local_path": "C:/GIT/hopenvision",
+      "tech_stack": {
+        "backend": "java-spring-boot",
+        "frontend": "react-typescript",
+        "database": "postgresql",
+        "build_tool": "gradle"
+      },
+      "main_branch": "main",
+      "deploy_branch": "prod",
+      "docker_compose": {
+        "local": "docker-compose.yml",
+        "production": "docker-compose.prod.yml"
+      },
+      "commands": {
+        "build_backend": "./gradlew build",
+        "build_frontend": "npm run build",
+        "test_backend": "./gradlew test",
+        "test_frontend": "npm test",
+        "lint_frontend": "npm run lint"
+      },
+      "ports": {
+        "frontend": 4060,
+        "backend": 9050
+      },
+      "urls": {
+        "frontend": "http://study.unmong.com:4060",
+        "backend": "http://study.unmong.com:9050",
+        "swagger": "http://study.unmong.com:9050/swagger-ui.html"
+      },
+      "project_structure": {
+        "backend_root": "api/",
+        "frontend_root": "web-admin/",
+        "source_main": "api/src/main/java/com/hopenvision/",
+        "source_test": "api/src/test/java/com/hopenvision/",
+        "frontend_src": "web-admin/src/"
+      },
+      "qa_agent_project": "hopenvision",
+      "enabled": true,
+      "notes": "공무원 시험 채점 시스템 - Java 17, Spring Boot 3.2.2, React 19, TypeScript 5.9, PostgreSQL 16"
+    }
+  }
+}

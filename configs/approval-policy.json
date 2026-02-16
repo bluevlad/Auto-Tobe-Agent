@@ -1,0 +1,89 @@
+{
+  "version": "1.0.0",
+  "default_reviewers": ["bluevlad"],
+  "policies": {
+    "P0": {
+      "description": "Critical - 보안 취약점, 데이터 유출. 수정+PR 자동, 머지/배포 사람 승인",
+      "auto_fix": true,
+      "auto_pr": true,
+      "auto_merge": false,
+      "auto_deploy": false,
+      "required_reviewers": ["bluevlad"],
+      "fix_strategy": "claude-code-cli",
+      "max_retry": 1,
+      "timeout_minutes": 30,
+      "notification": {
+        "on_fix_created": true,
+        "on_pr_created": true,
+        "on_verification_complete": true,
+        "channels": ["github-mention"]
+      }
+    },
+    "P1": {
+      "description": "High - 인증 부재, 심각한 성능 문제. 머지 사람 승인, 배포 자동",
+      "auto_fix": true,
+      "auto_pr": true,
+      "auto_merge": false,
+      "auto_deploy": true,
+      "required_reviewers": ["bluevlad"],
+      "fix_strategy": "claude-code-cli",
+      "max_retry": 2,
+      "timeout_minutes": 30,
+      "notification": {
+        "on_fix_created": false,
+        "on_pr_created": true,
+        "on_verification_complete": true,
+        "channels": ["github-mention"]
+      }
+    },
+    "P2": {
+      "description": "Medium - 성능 최적화, 아키텍처 개선. 검증 통과 시 완전 자동",
+      "auto_fix": true,
+      "auto_pr": true,
+      "auto_merge": true,
+      "auto_deploy": true,
+      "required_reviewers": [],
+      "conditions": {
+        "all_checks_passed": true,
+        "no_regression": true
+      },
+      "fix_strategy": "claude-code-cli",
+      "max_retry": 3,
+      "timeout_minutes": 20,
+      "notification": {
+        "on_fix_created": false,
+        "on_pr_created": false,
+        "on_verification_complete": true,
+        "channels": ["github-mention"]
+      }
+    },
+    "P3": {
+      "description": "Low - 코드 품질, 문서화. 완전 자동",
+      "auto_fix": true,
+      "auto_pr": true,
+      "auto_merge": true,
+      "auto_deploy": true,
+      "required_reviewers": [],
+      "conditions": {
+        "all_checks_passed": true,
+        "no_regression": true
+      },
+      "fix_strategy": "template-based",
+      "max_retry": 3,
+      "timeout_minutes": 15,
+      "notification": {
+        "on_fix_created": false,
+        "on_pr_created": false,
+        "on_verification_complete": false,
+        "channels": []
+      }
+    }
+  },
+  "global_rules": {
+    "max_concurrent_fixes": 1,
+    "branch_prefix": "fix",
+    "pr_template": "auto-fix",
+    "require_clean_build": true,
+    "require_existing_tests_pass": true
+  }
+}
