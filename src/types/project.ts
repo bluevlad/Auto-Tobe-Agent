@@ -59,6 +59,8 @@ export interface ProjectConfig {
   qa_agent_project: string;
   enabled: boolean;
   notes?: string;
+  /** Docker 서비스 모니터링/배포 설정 (Phase 7+) */
+  docker?: import('./docker.js').DockerConfig;
 }
 
 /** 전체 프로젝트 설정 파일 */

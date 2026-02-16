@@ -19,12 +19,48 @@ coverage/
 Thumbs.db
 nul
 
-# Environment
+# ===== Security: 보안 관련 파일 절대 커밋 금지 =====
+# Environment & Credentials
 .env
+.env.*
 .env.local
 .env.*.local
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.jks
+*.keystore
 
-# Logs
+# Secrets & Tokens
+secrets/
+credentials/
+credentials.json
+service-account*.json
+*.secret
+.token
+.tokens/
+
+# SSH & Auth
+id_rsa*
+id_ed25519*
+*.pub
+known_hosts
+authorized_keys
+
+# Server-specific configs (macOS 운영서버 계정 정보 등)
+configs/*.local.json
+configs/*.local.yaml
+configs/*.local.toml
+!configs/*.local.json.example
+
+# Docker secrets
+docker-compose.override.yml
+.docker/
+docker-secrets/
+
+# ===== Logs & Runtime =====
 logs/
 *.log
 
@@ -35,3 +71,7 @@ logs/
 *.tmp
 *.temp
 .cache/
+
+# Monitor state (runtime data)
+logs/monitor-state.json
+logs/docker-issues.json

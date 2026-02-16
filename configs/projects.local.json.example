@@ -1,0 +1,13 @@
+{
+  "_comment": "이 파일을 projects.local.json으로 복사하여 운영 환경에 맞게 수정하세요. projects.local.json은 .gitignore에 의해 커밋되지 않습니다.",
+  "projects": {
+    "hopenvision": {
+      "local_path": "/Users/your-username/GIT/hopenvision",
+      "urls": {
+        "frontend": "http://your-server:4060",
+        "backend": "http://your-server:9050",
+        "swagger": "http://your-server:9050/swagger-ui.html"
+      }
+    }
+  }
+}

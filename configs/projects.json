@@ -1,9 +1,9 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "projects": {
     "hopenvision": {
       "repo": "bluevlad/hopenvision",
-      "local_path": "C:/GIT/hopenvision",
+      "local_path": "${HOME}/GIT/hopenvision",
       "tech_stack": {
         "backend": "java-spring-boot",
         "frontend": "react-typescript",
@@ -28,9 +28,9 @@
         "backend": 9050
       },
       "urls": {
-        "frontend": "http://study.unmong.com:4060",
-        "backend": "http://study.unmong.com:9050",
-        "swagger": "http://study.unmong.com:9050/swagger-ui.html"
+        "frontend": "http://localhost:4060",
+        "backend": "http://localhost:9050",
+        "swagger": "http://localhost:9050/swagger-ui.html"
       },
       "project_structure": {
         "backend_root": "api/",
@@ -38,6 +38,91 @@
         "source_main": "api/src/main/java/com/hopenvision/",
         "source_test": "api/src/test/java/com/hopenvision/",
         "frontend_src": "web-admin/src/"
+      },
+      "docker": {
+        "compose_file": "docker-compose.prod.yml",
+        "services": {
+          "api": {
+            "container_name": "hopenvision-api",
+            "health_check": {
+              "type": "http",
+              "endpoint": "/actuator/health",
+              "port": 9050,
+              "interval_seconds": 600,
+              "timeout_seconds": 10,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": [
+                "OutOfMemoryError",
+                "StackOverflowError",
+                "Connection refused",
+                "FATAL",
+                "Caused by.*Exception"
+              ],
+              "warning": [
+                "Slow query detected",
+                "HikariPool.*not available",
+                "Connection pool exhausted"
+              ]
+            },
+            "resource_limits": {
+              "cpu_percent": 80,
+              "memory_mb": 1536,
+              "disk_percent": 85
+            },
+            "deploy": {
+              "build_context": "api/",
+              "dockerfile": "api/Dockerfile",
+              "rollback_on_failure": true,
+              "health_wait_seconds": 60
+            }
+          },
+          "web-admin": {
+            "container_name": "hopenvision-web",
+            "health_check": {
+              "type": "http",
+              "endpoint": "/",
+              "port": 4060,
+              "interval_seconds": 600,
+              "timeout_seconds": 5,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": ["Error", "ECONNREFUSED"],
+              "warning": ["WARN"]
+            },
+            "resource_limits": {
+              "cpu_percent": 60,
+              "memory_mb": 512,
+              "disk_percent": 85
+            },
+            "deploy": {
+              "build_context": "web-admin/",
+              "dockerfile": "web-admin/Dockerfile",
+              "rollback_on_failure": true,
+              "health_wait_seconds": 30
+            }
+          },
+          "db": {
+            "container_name": "hopenvision-db",
+            "health_check": {
+              "type": "exec",
+              "command": "pg_isready -U postgres",
+              "interval_seconds": 300,
+              "timeout_seconds": 5,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 2
+            },
+            "resource_limits": {
+              "cpu_percent": 70,
+              "memory_mb": 2048,
+              "disk_percent": 80
+            }
+          }
+        }
       },
       "qa_agent_project": "hopenvision",
       "enabled": true,

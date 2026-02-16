@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Tier 1: Docker Service Health Monitor
+  매 10분마다 Docker 서비스 상태를 점검합니다.
+
+  설치:
+    1. ${AGENT_HOME}을 실제 경로로 치환하세요
+    2. cp scripts/com.bluevlad.auto-tobe-agent.monitor.plist ~/Library/LaunchAgents/
+    3. launchctl load ~/Library/LaunchAgents/com.bluevlad.auto-tobe-agent.monitor.plist
+-->
+<dict>
+    <key>Label</key>
+    <string>com.bluevlad.auto-tobe-agent.monitor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>${AGENT_HOME}/scripts/run-ops.sh</string>
+        <string>monitor</string>
+    </array>
+
+    <!-- 매 600초 (10분) 간격 실행 -->
+    <key>StartInterval</key>
+    <integer>600</integer>
+
+    <key>WorkingDirectory</key>
+    <string>${AGENT_HOME}</string>
+
+    <key>StandardOutPath</key>
+    <string>${AGENT_HOME}/logs/launchd-monitor-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>${AGENT_HOME}/logs/launchd-monitor-stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>AbandonProcessGroup</key>
+    <false/>
+</dict>
+</plist>

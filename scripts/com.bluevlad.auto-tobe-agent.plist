@@ -1,19 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+<!--
+  Auto-Tobe-Agent launchd 기본 설정 (레거시 호환)
+  이슈 수정 배치를 하루 3회 실행합니다.
+
+  설치:
+    1. 이 파일의 경로를 운영 환경에 맞게 수정하세요 (AGENT_HOME, HOME 등)
+    2. cp scripts/com.bluevlad.auto-tobe-agent.plist ~/Library/LaunchAgents/
+    3. launchctl load ~/Library/LaunchAgents/com.bluevlad.auto-tobe-agent.plist
+
+  주의: 경로에 실제 사용자명/서버 정보를 포함하지 않도록 local.json에서 오버라이드하세요.
+-->
 <dict>
-    <!-- 서비스 식별자 -->
     <key>Label</key>
     <string>com.bluevlad.auto-tobe-agent</string>
 
-    <!-- 실행할 스크립트 -->
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/bluevlad/GIT/Auto-Tobe-Agent/scripts/run-batch.sh</string>
+        <string>${AGENT_HOME}/scripts/run-batch.sh</string>
     </array>
 
-    <!-- 실행 스케줄: 매일 09:00, 14:00, 20:00 -->
     <key>StartCalendarInterval</key>
     <array>
         <dict>
@@ -36,36 +44,23 @@
         </dict>
     </array>
 
-    <!-- 작업 디렉토리 -->
     <key>WorkingDirectory</key>
-    <string>/Users/bluevlad/GIT/Auto-Tobe-Agent</string>
+    <string>${AGENT_HOME}</string>
 
-    <!-- 표준 출력/에러 로그 -->
     <key>StandardOutPath</key>
-    <string>/Users/bluevlad/GIT/Auto-Tobe-Agent/logs/launchd-stdout.log</string>
+    <string>${AGENT_HOME}/logs/launchd-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/bluevlad/GIT/Auto-Tobe-Agent/logs/launchd-stderr.log</string>
+    <string>${AGENT_HOME}/logs/launchd-stderr.log</string>
 
-    <!-- 환경 변수 -->
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
-        <key>AGENT_HOME</key>
-        <string>/Users/bluevlad/GIT/Auto-Tobe-Agent</string>
-        <key>HOME</key>
-        <string>/Users/bluevlad</string>
     </dict>
 
-    <!-- 실패 시 재시도 안 함 (다음 스케줄에서 처리) -->
-    <key>StartInterval</key>
-    <false/>
-
-    <!-- 부팅 시 자동 로드 -->
     <key>RunAtLoad</key>
     <false/>
 
-    <!-- 동시 실행 방지 -->
     <key>AbandonProcessGroup</key>
     <false/>
 </dict>

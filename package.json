@@ -1,7 +1,7 @@
 {
   "name": "auto-tobe-agent",
-  "version": "0.4.0",
-  "description": "Autonomous Code Fixer Agent - GitHub Issues 기반 자동 코드 수정",
+  "version": "1.0.0",
+  "description": "Autonomous Code Fixer & Docker Ops Agent - GitHub Issues 자동 수정 및 Docker 서비스 운영 자동화",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -12,8 +12,10 @@
   },
   "keywords": [
     "code-fixer",
+    "docker-ops",
     "automation",
     "github-issues",
+    "monitoring",
     "agent"
   ],
   "author": "bluevlad",

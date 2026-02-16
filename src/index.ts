@@ -1,7 +1,8 @@
 /**
- * Auto-Tobe-Agent - Autonomous Code Fixer
+ * Auto-Tobe-Agent - Autonomous Code Fixer & Docker Ops Agent
  *
- * QA Agent가 발견한 GitHub Issues를 자동으로 수정하는 Agent
+ * QA Agent가 발견한 GitHub Issues를 자동으로 수정하고,
+ * 운영 중인 Docker 서비스를 모니터링/배포하는 Agent
  *
  * 사용법:
  *   npm start                              # 설정 로드 및 상태 표시
@@ -11,13 +12,16 @@
  *   npm start -- fix <project> --auto      # 자동 수정 가능한 이슈 일괄 수정
  *   npm start -- batch [project]           # 배치 모드 (이력 관리 포함)
  *   npm start -- history [project]         # 처리 이력 조회
+ *   npm start -- docker-monitor [project]  # Docker 서비스 모니터링
+ *   npm start -- docker-deploy [project]   # Docker 배포 큐 처리
+ *   npm start -- ops [project]             # 전체 운영 (모니터 → 수정 → 배포)
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
-import type { ProjectsConfig, ApprovalPolicyConfig, Priority, ParsedIssue } from './types/index.js';
+import type { ProjectsConfig, ApprovalPolicyConfig, Priority, ParsedIssue, ScheduleConfig } from './types/index.js';
 import { fetchOpenIssueNumbers, parseIssue, isParsedIssue, sortByPriority } from './issue-parser.js';
 import { resolveProject, resolveAllProjects } from './project-resolver.js';
 import { orchestrateFix, orchestrateBatchFix } from './fix-orchestrator.js';
@@ -29,13 +33,17 @@ import {
   recordResult,
   getProjectStats,
 } from './fix-history.js';
+import { monitorAllServices } from './docker-monitor.js';
+import { correlateMonitorResult, createDockerGitHubIssues } from './issue-correlator.js';
+import { processDeployQueue, checkMergedPRsAndEnqueue } from './docker-deployer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 function loadConfig<T>(relativePath: string): T {
   const fullPath = resolve(__dirname, '..', relativePath);
-  const content = readFileSync(fullPath, 'utf-8');
+  let content = readFileSync(fullPath, 'utf-8');
+  content = content.replace(/\$\{(\w+)\}/g, (_, key) => process.env[key] ?? '');
   return JSON.parse(content) as T;
 }
 
@@ -43,7 +51,7 @@ function loadConfig<T>(relativePath: string): T {
  * 기본 모드: 설정 로드 및 상태 표시
  */
 function showStatus(): void {
-  console.log('Auto-Tobe-Agent v0.4.0');
+  console.log('Auto-Tobe-Agent v1.0.0');
   console.log('='.repeat(50));
 
   const projects = loadConfig<ProjectsConfig>('configs/projects.json');
@@ -54,9 +62,33 @@ function showStatus(): void {
     .map(([name]) => name);
   console.log(`Enabled projects: ${enabledProjects.join(', ')}`);
 
+  // Docker 서비스 수 표시
+  let totalDockerServices = 0;
+  for (const name of enabledProjects) {
+    const projConfig = projects.projects[name];
+    if (projConfig.docker?.services) {
+      const count = Object.keys(projConfig.docker.services).length;
+      totalDockerServices += count;
+      console.log(`  ${name}: ${count} Docker services`);
+    }
+  }
+  if (totalDockerServices > 0) {
+    console.log(`Total Docker services: ${totalDockerServices}`);
+  }
+
   const policy = loadConfig<ApprovalPolicyConfig>('configs/approval-policy.json');
   console.log(`Approval policy v${policy.version} loaded`);
   console.log(`Default reviewers: ${policy.default_reviewers.join(', ')}`);
+
+  // 스케줄 설정 표시
+  const schedulePath = resolve(__dirname, '..', 'configs', 'schedule.json');
+  if (existsSync(schedulePath)) {
+    const schedule = loadConfig<ScheduleConfig>('configs/schedule.json');
+    console.log(`\nSchedule config v${schedule.version}:`);
+    console.log(`  Monitor: ${schedule.tiers.monitor.enabled ? `every ${schedule.tiers.monitor.interval_minutes}min` : 'disabled'}`);
+    console.log(`  Fix: ${schedule.tiers.fix.enabled ? `at ${schedule.tiers.fix.schedule_hours.join(', ')}h` : 'disabled'}`);
+    console.log(`  Deploy: ${schedule.tiers.deploy.enabled ? `${schedule.tiers.deploy.trigger}, ${schedule.tiers.deploy.allowed_hours.start}-${schedule.tiers.deploy.allowed_hours.end}h` : 'disabled'}`);
+  }
 
   // 처리 이력 요약
   const history = loadHistory();
@@ -78,6 +110,9 @@ function showStatus(): void {
   console.log('  npm start -- fix <project> --auto      자동 일괄 수정');
   console.log('  npm start -- batch [project]           배치 모드 (이력 관리)');
   console.log('  npm start -- history [project]         처리 이력 조회');
+  console.log('  npm start -- docker-monitor [project]  Docker 서비스 모니터링');
+  console.log('  npm start -- docker-deploy [project]   Docker 배포 큐 처리');
+  console.log('  npm start -- ops [project]             전체 운영 (모니터+수정+배포)');
 }
 
 /**
@@ -168,6 +203,9 @@ async function resolveProjectCommand(projectName?: string): Promise<void> {
     console.log(`  DB: ${project.config.tech_stack.database}`);
     console.log(`  Build: ${project.config.commands.build_backend}`);
     console.log(`  Test: ${project.config.commands.test_backend}`);
+    if (project.config.docker?.services) {
+      console.log(`  Docker services: ${Object.keys(project.config.docker.services).join(', ')}`);
+    }
     if (project.gitStatus) {
       console.log(`  Branch: ${project.gitStatus.currentBranch}`);
       console.log(`  Clean: ${project.gitStatus.isClean}`);
@@ -178,7 +216,8 @@ async function resolveProjectCommand(projectName?: string): Promise<void> {
     console.log(`\n[resolve] ${projects.length} enabled projects:`);
     for (const p of projects) {
       const status = p.localPathExists ? (p.gitStatus?.isClean ? 'clean' : 'dirty') : 'NOT FOUND';
-      console.log(`  ${p.name}: ${p.config.repo} [${status}]`);
+      const dockerCount = p.config.docker?.services ? Object.keys(p.config.docker.services).length : 0;
+      console.log(`  ${p.name}: ${p.config.repo} [${status}] (${dockerCount} docker services)`);
     }
   }
 }
@@ -429,6 +468,87 @@ function showHistory(projectName?: string): void {
 }
 
 /**
+ * docker-monitor 모드: Docker 서비스를 점검합니다.
+ * 이상 감지 시 이슈 상관관계 분석 후 GitHub Issue를 생성합니다.
+ */
+async function runDockerMonitor(projectName?: string): Promise<void> {
+  console.log('\n[docker-monitor] Docker Service Health Check');
+  console.log('='.repeat(50));
+
+  // 1. 서비스 모니터링
+  const monitorResult = await monitorAllServices(projectName);
+
+  // 2. 이슈가 있으면 상관관계 분석
+  if (monitorResult.issues.length > 0) {
+    console.log('\n[correlate] Analyzing detected issues...');
+
+    const config = loadConfig<ProjectsConfig>('configs/projects.json');
+    const repoMap: Record<string, string> = {};
+    for (const [name, cfg] of Object.entries(config.projects)) {
+      repoMap[name] = cfg.repo;
+    }
+
+    const correlationResult = await correlateMonitorResult(monitorResult, repoMap);
+
+    // 3. 새 이슈 GitHub에 생성
+    const newIssues = correlationResult.results.filter((r) => r.needsGitHubIssue);
+    if (newIssues.length > 0) {
+      console.log(`\n[create] Creating ${newIssues.length} GitHub issues...`);
+      const { created, errors } = await createDockerGitHubIssues(
+        correlationResult.results,
+        repoMap,
+      );
+      console.log(`  Created: ${created}, Errors: ${errors}`);
+    }
+  }
+
+  console.log(`\n[docker-monitor] Completed (${monitorResult.durationMs}ms)`);
+}
+
+/**
+ * docker-deploy 모드: 배포 큐를 처리합니다.
+ */
+async function runDockerDeploy(projectName?: string): Promise<void> {
+  console.log('\n[docker-deploy] Docker Deploy Queue Processing');
+  console.log('='.repeat(50));
+
+  // 머지된 PR 확인 → 배포 큐 추가
+  console.log('[deploy] Checking merged PRs...');
+  const enqueued = await checkMergedPRsAndEnqueue(projectName);
+  console.log(`  Enqueued: ${enqueued} services`);
+
+  // 배포 큐 처리
+  await processDeployQueue(projectName);
+}
+
+/**
+ * ops 모드: 전체 운영 파이프라인 (모니터 → 수정 → 배포)
+ */
+async function runOps(projectName?: string): Promise<void> {
+  const timestamp = new Date().toISOString();
+  console.log('\n' + '='.repeat(60));
+  console.log('  Auto-Tobe-Agent OPS Pipeline');
+  console.log(`  Started: ${timestamp}`);
+  console.log('='.repeat(60));
+
+  // Tier 1: Docker 모니터링
+  console.log('\n>>> Tier 1: Docker Service Monitoring');
+  await runDockerMonitor(projectName);
+
+  // Tier 2: 이슈 수정 배치
+  console.log('\n>>> Tier 2: Issue Fix Batch');
+  await runBatch(projectName);
+
+  // Tier 3: 배포 큐 처리
+  console.log('\n>>> Tier 3: Docker Deploy');
+  await runDockerDeploy(projectName);
+
+  console.log('\n' + '='.repeat(60));
+  console.log(`  OPS Pipeline Completed: ${new Date().toISOString()}`);
+  console.log('='.repeat(60));
+}
+
+/**
  * 단일 수정 결과 출력
  */
 function printFixSummary(result: import('./types/index.js').FixResult): void {
@@ -522,6 +642,18 @@ async function main(): Promise<void> {
 
       case 'history':
         showHistory(target);
+        break;
+
+      case 'docker-monitor':
+        await runDockerMonitor(target);
+        break;
+
+      case 'docker-deploy':
+        await runDockerDeploy(target);
+        break;
+
+      case 'ops':
+        await runOps(target);
         break;
 
       default:

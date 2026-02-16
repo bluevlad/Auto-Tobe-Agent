@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Tier 3: Docker Deploy Queue Processor
+  매 30분마다 배포 큐를 확인하고 처리합니다.
+
+  설치:
+    1. ${AGENT_HOME}을 실제 경로로 치환하세요
+    2. cp scripts/com.bluevlad.auto-tobe-agent.deploy.plist ~/Library/LaunchAgents/
+    3. launchctl load ~/Library/LaunchAgents/com.bluevlad.auto-tobe-agent.deploy.plist
+-->
+<dict>
+    <key>Label</key>
+    <string>com.bluevlad.auto-tobe-agent.deploy</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>${AGENT_HOME}/scripts/run-ops.sh</string>
+        <string>deploy</string>
+    </array>
+
+    <!-- 매 1800초 (30분) 간격 실행 -->
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <key>WorkingDirectory</key>
+    <string>${AGENT_HOME}</string>
+
+    <key>StandardOutPath</key>
+    <string>${AGENT_HOME}/logs/launchd-deploy-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>${AGENT_HOME}/logs/launchd-deploy-stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>AbandonProcessGroup</key>
+    <false/>
+</dict>
+</plist>

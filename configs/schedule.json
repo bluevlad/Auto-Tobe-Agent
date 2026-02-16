@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "tiers": {
+    "monitor": {
+      "enabled": true,
+      "interval_minutes": 10,
+      "max_duration_seconds": 120,
+      "on_critical": "restart_and_alert",
+      "on_warning": "log_and_create_issue",
+      "alert_channels": ["github-mention"]
+    },
+    "fix": {
+      "enabled": true,
+      "schedule_hours": [9, 14, 20],
+      "max_duration_minutes": 120,
+      "max_issues_per_service": 3,
+      "round_robin": true,
+      "priority_order": ["P0", "P1", "P2", "P3"],
+      "cooldown_between_fixes_seconds": 30
+    },
+    "deploy": {
+      "enabled": true,
+      "trigger": "on_merge_or_batch",
+      "allowed_hours": { "start": 9, "end": 21 },
+      "deploy_order": ["db", "backend", "frontend"],
+      "health_check_timeout_seconds": 120,
+      "auto_rollback": true,
+      "require_approval_for": ["P0", "P1"]
+    }
+  },
+  "scaling": {
+    "auto_adjust_schedule": true,
+    "max_services": 20,
+    "add_batch_run_at_services": 5,
+    "extra_schedule_hours": [6, 11, 16, 22]
+  }
+}
