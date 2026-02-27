@@ -453,7 +453,7 @@ async function runBatch(projectName?: string): Promise<void> {
         totalSkipped++;
       } else {
         totalFailed++;
-        console.log(`  #${issue.number} FAILED: ${fixResult.error?.substring(0, 100)}`);
+        console.log(`  #${issue.number} FAILED: ${fixResult.error}`);
       }
 
       // 매 이슈 처리 후 이력 저장 (중간 크래시 대비)
@@ -656,7 +656,7 @@ function printBatchSummary(results: import('./types/index.js').FixResult[]): voi
   if (failed.length > 0) {
     console.log('\n  Failed:');
     for (const r of failed) {
-      console.log(`    #${r.issueNumber}: ${r.error?.substring(0, 100)}`);
+      console.log(`    #${r.issueNumber}: ${r.error}`);
     }
   }
 }

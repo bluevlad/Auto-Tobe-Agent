@@ -534,8 +534,11 @@ export async function checkMergedPRsAndEnqueue(projectName?: string): Promise<nu
         }
       }
     } catch (error) {
-      const err = error as { message?: string };
-      console.log(`  [deploy] ${projName}: PR 확인 실패: ${err.message?.substring(0, 100)}`);
+      const err = error as { message?: string; stderr?: string };
+      console.error(`  [deploy] ${projName}: PR 확인 실패: ${err.message}`);
+      if (err.stderr) {
+        console.error(`  [deploy] stderr: ${err.stderr.trim()}`);
+      }
     }
   }
 

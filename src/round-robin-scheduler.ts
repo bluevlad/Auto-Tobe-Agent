@@ -285,7 +285,7 @@ export async function executeRoundRobinBatch(
       results.push(fixResult);
       failed++;
       perProject[item.project].failed++;
-      console.log(`  #${item.issueNumber} FAILED: ${fixResult.error?.substring(0, 100)}`);
+      console.log(`  #${item.issueNumber} FAILED: ${fixResult.error}`);
     }
 
     // 매 이슈 처리 후 이력 저장 (중간 크래시 대비)

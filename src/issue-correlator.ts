@@ -407,8 +407,14 @@ export async function createDockerGitHubIssues(
       console.log(`  [create] Issue created: ${stdout.trim()}`);
       created++;
     } catch (error) {
-      const err = error as { message?: string };
-      console.log(`  [create] Failed: ${err.message?.substring(0, 100)}`);
+      const err = error as { message?: string; stderr?: string; code?: number };
+      console.error(`  [create] Failed: ${err.message}`);
+      if (err.stderr) {
+        console.error(`  [create] stderr: ${err.stderr.trim()}`);
+      }
+      if (err.code !== undefined) {
+        console.error(`  [create] exit code: ${err.code}`);
+      }
       errors++;
     }
   }
