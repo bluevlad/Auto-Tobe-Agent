@@ -36,6 +36,7 @@ import {
 import { monitorAllServices } from './docker-monitor.js';
 import { correlateMonitorResult, createDockerGitHubIssues } from './issue-correlator.js';
 import { processDeployQueue, checkMergedPRsAndEnqueue } from './docker-deployer.js';
+import { executeRoundRobinBatch, checkScheduleAdjustment } from './round-robin-scheduler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -88,6 +89,15 @@ function showStatus(): void {
     console.log(`  Monitor: ${schedule.tiers.monitor.enabled ? `every ${schedule.tiers.monitor.interval_minutes}min` : 'disabled'}`);
     console.log(`  Fix: ${schedule.tiers.fix.enabled ? `at ${schedule.tiers.fix.schedule_hours.join(', ')}h` : 'disabled'}`);
     console.log(`  Deploy: ${schedule.tiers.deploy.enabled ? `${schedule.tiers.deploy.trigger}, ${schedule.tiers.deploy.allowed_hours.start}-${schedule.tiers.deploy.allowed_hours.end}h` : 'disabled'}`);
+    console.log(`  Round-Robin: ${schedule.tiers.fix.round_robin ? 'enabled' : 'disabled'}`);
+
+    // 스케줄 자동 조정 권고
+    const adjustment = checkScheduleAdjustment(enabledProjects.length, schedule);
+    if (adjustment) {
+      console.log(`\n  [RECOMMENDATION] ${adjustment.reason}`);
+      console.log(`    현재 스케줄: ${adjustment.currentScheduleHours.join(', ')}h`);
+      console.log(`    권고 스케줄: ${adjustment.recommendedScheduleHours.join(', ')}h`);
+    }
   }
 
   // 처리 이력 요약
@@ -322,6 +332,9 @@ async function fixAutoIssues(
 /**
  * batch 모드: 이력 관리를 포함한 배치 실행.
  * 이미 처리된 이슈는 건너뜁니다.
+ *
+ * round_robin: true && 대상 프로젝트 > 1 → Round-Robin 경로
+ * 그 외 → 기존 순차 처리 (하위 호환)
  */
 async function runBatch(projectName?: string): Promise<void> {
   const timestamp = new Date().toISOString();
@@ -330,7 +343,6 @@ async function runBatch(projectName?: string): Promise<void> {
   console.log('='.repeat(50));
 
   const projectsConfig = loadConfig<ProjectsConfig>('configs/projects.json');
-  const history = loadHistory();
 
   // 대상 프로젝트 결정
   const targetProjects = projectName
@@ -338,6 +350,43 @@ async function runBatch(projectName?: string): Promise<void> {
     : Object.entries(projectsConfig.projects)
         .filter(([, cfg]) => cfg.enabled)
         .map(([name]) => name);
+
+  // 스케줄 설정 로드
+  const schedulePath = resolve(__dirname, '..', 'configs', 'schedule.json');
+  const hasSchedule = existsSync(schedulePath);
+  const scheduleConfig = hasSchedule
+    ? loadConfig<ScheduleConfig>('configs/schedule.json')
+    : null;
+  const fixConfig = scheduleConfig?.tiers.fix;
+
+  // Round-Robin 조건: round_robin 활성화 && 대상 프로젝트 2개 이상
+  const useRoundRobin = fixConfig?.round_robin === true && targetProjects.length > 1;
+
+  if (useRoundRobin && scheduleConfig) {
+    console.log(`  Mode: Round-Robin (${targetProjects.length} projects)`);
+    const result = await executeRoundRobinBatch(targetProjects, scheduleConfig);
+
+    // Round-Robin 결과 요약
+    console.log('\n' + '='.repeat(50));
+    console.log('BATCH SUMMARY (Round-Robin)');
+    console.log('='.repeat(50));
+    console.log(`  Processed: ${result.totalProcessed}`);
+    console.log(`  Succeeded: ${result.succeeded}`);
+    console.log(`  Failed: ${result.failed}`);
+    console.log(`  Skipped: ${result.skipped}`);
+    console.log(`  Timed out: ${result.timedOut ? 'YES' : 'no'}`);
+    console.log(`  Duration: ${(result.totalDurationMs / 1000).toFixed(1)}s`);
+    for (const [proj, stats] of Object.entries(result.perProject)) {
+      console.log(`  [${proj}] processed: ${stats.processed}, ok: ${stats.succeeded}, fail: ${stats.failed}`);
+    }
+    console.log(`  Completed: ${result.completedAt}`);
+    return;
+  }
+
+  // 순차 처리 경로 (하위 호환)
+  console.log(`  Mode: Sequential`);
+  const history = loadHistory();
+  const maxPerService = fixConfig?.max_issues_per_service ?? Infinity;
 
   let totalProcessed = 0;
   let totalSkipped = 0;
@@ -379,10 +428,16 @@ async function runBatch(projectName?: string): Promise<void> {
     }
 
     const sorted = sortByPriority(parsed);
-    console.log(`  새로 처리할 이슈: ${sorted.length}건`);
+    // max_issues_per_service 적용
+    const limited = sorted.slice(0, maxPerService);
+    if (sorted.length > limited.length) {
+      console.log(`  새로 처리할 이슈: ${limited.length}건 (쿼터 ${maxPerService}, 전체 ${sorted.length}건)`);
+    } else {
+      console.log(`  새로 처리할 이슈: ${limited.length}건`);
+    }
 
     // 순차 처리
-    for (const issue of sorted) {
+    for (const issue of limited) {
       console.log(`\n  Processing #${issue.number} [${issue.priority}]...`);
       totalProcessed++;
 

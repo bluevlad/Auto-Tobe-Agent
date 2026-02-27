@@ -44,6 +44,7 @@ npm run dev          # 개발 모드 (watch)
 | `docker-monitor.ts` | Docker 서비스 Health Monitor | 7 |
 | `issue-correlator.ts` | Docker 이슈 ↔ GitHub Issue 상관관계 | 8 |
 | `docker-deployer.ts` | Docker 빌드/배포/롤백 관리 | 9 |
+| `round-robin-scheduler.ts` | Multi-Service Round-Robin 배치 스케줄러 | 10 |
 
 ### 설정 파일 (`configs/`)
 
@@ -63,6 +64,7 @@ npm run dev          # 개발 모드 (watch)
 | `fix-result.ts` | FixResult, FixStatus, BatchFixResult |
 | `approval-policy.ts` | ApprovalPolicyConfig, PriorityPolicy |
 | `docker.ts` | DockerServiceConfig, MonitorResult, DeployResult, ScheduleConfig |
+| `scheduler.ts` | RoundRobinState, BatchPlan, PlannedWorkItem, ScheduleAdjustment |
 
 ## 설계 원칙
 

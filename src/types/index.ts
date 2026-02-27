@@ -61,3 +61,12 @@ export type {
   ScalingConfig,
   ScheduleConfig,
 } from './docker.js';
+
+export type {
+  RoundRobinState,
+  ServiceWorkQueue,
+  PlannedWorkItem,
+  BatchPlan,
+  RoundRobinBatchResult,
+  ScheduleAdjustment,
+} from './scheduler.js';

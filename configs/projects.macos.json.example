@@ -28,9 +28,9 @@
         "backend": 9050
       },
       "urls": {
-        "frontend": "http://study.unmong.com:4060",
-        "backend": "http://study.unmong.com:9050",
-        "swagger": "http://study.unmong.com:9050/swagger-ui.html"
+        "frontend": "http://your-server.example.com:4060",
+        "backend": "http://your-server.example.com:9050",
+        "swagger": "http://your-server.example.com:9050/swagger-ui.html"
       },
       "project_structure": {
         "backend_root": "api/",

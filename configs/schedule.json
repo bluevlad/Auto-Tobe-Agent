@@ -11,7 +11,7 @@
     },
     "fix": {
       "enabled": true,
-      "schedule_hours": [9, 14, 20],
+      "schedule_hours": [9, 14, 20, 23],
       "max_duration_minutes": 120,
       "max_issues_per_service": 3,
       "round_robin": true,
