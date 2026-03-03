@@ -8,7 +8,7 @@
  * - 인프라/코드 이슈 분류
  */
 
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -24,6 +24,7 @@ import type {
 } from './types/index.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -398,12 +399,11 @@ export async function createDockerGitHubIssues(
     );
 
     try {
-      const labelArgs = labels.map((l) => `--label "${l}"`).join(' ');
-      const escapedTitle = title.replace(/"/g, '\\"');
-      const { stdout } = await execAsync(
-        `gh issue create --repo ${repo} --title "${escapedTitle}" ${labelArgs} --body "${body.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`,
-        { timeout: 30_000 },
-      );
+      const args = ['issue', 'create', '--repo', repo, '--title', title, '--body', body];
+      for (const label of labels) {
+        args.push('--label', label);
+      }
+      const { stdout } = await execFileAsync('gh', args, { timeout: 30_000 });
       console.log(`  [create] Issue created: ${stdout.trim()}`);
       created++;
     } catch (error) {

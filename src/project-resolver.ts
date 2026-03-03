@@ -12,14 +12,23 @@ const __dirname = dirname(__filename);
 let cachedConfig: ProjectsConfig | null = null;
 
 /**
+ * 문자열 내의 ${VAR} 패턴을 환경변수 값으로 치환합니다.
+ */
+function expandEnvVars(value: string): string {
+  return value.replace(/\$\{(\w+)\}/g, (_, name) => process.env[name] ?? '');
+}
+
+/**
  * configs/projects.json을 로드합니다 (캐시 활용).
+ * local_path 등의 환경변수 참조(${HOME})를 실제 값으로 치환합니다.
  */
 function loadProjectsConfig(): ProjectsConfig {
   if (cachedConfig) return cachedConfig;
 
   const configPath = resolve(__dirname, '..', 'configs', 'projects.json');
-  const content = readFileSync(configPath, 'utf-8');
-  cachedConfig = JSON.parse(content) as ProjectsConfig;
+  const raw = readFileSync(configPath, 'utf-8');
+  const expanded = expandEnvVars(raw);
+  cachedConfig = JSON.parse(expanded) as ProjectsConfig;
   return cachedConfig;
 }
 

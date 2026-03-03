@@ -2,8 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <!--
-  Auto-Tobe-Agent launchd 기본 설정 (레거시 호환)
-  이슈 수정 배치를 하루 3회 실행합니다.
+  Auto-Tobe-Agent launchd 배치 설정
+  QA Agent(22:00 이슈 등록) 기준으로 하루 3회 실행합니다.
+    - 09:00 메인 수정 (뉴스레터 발송 완료 후, QA 이슈 처리)
+    - 12:00 보충 수정 (오전 수동 등록 이슈 + 재시도)
+    - 23:30 즉시 대응 (QA 직후 P0/P1 긴급 수정)
 
   설치:
     1. 이 파일의 경로를 운영 환경에 맞게 수정하세요 (AGENT_HOME, HOME 등)
@@ -32,13 +35,7 @@
         </dict>
         <dict>
             <key>Hour</key>
-            <integer>14</integer>
-            <key>Minute</key>
-            <integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key>
-            <integer>20</integer>
+            <integer>12</integer>
             <key>Minute</key>
             <integer>0</integer>
         </dict>
@@ -46,7 +43,7 @@
             <key>Hour</key>
             <integer>23</integer>
             <key>Minute</key>
-            <integer>0</integer>
+            <integer>30</integer>
         </dict>
     </array>
 
