@@ -129,6 +129,10 @@ function invokeClaudeCode(
     const child = spawn('claude', ['-p'], {
       cwd,
       shell: true,
+      env: {
+        ...process.env,
+        PATH: `${process.env.HOME}/.local/bin:${process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin'}`,
+      },
     });
 
     let stdout = '';
