@@ -63,6 +63,14 @@ export type {
 } from './docker.js';
 
 export type {
+  FileCoverage,
+  FixDirectionMatch,
+  ComplianceScore,
+  FixComplianceReport,
+  QaVerificationData,
+} from './verification-report.js';
+
+export type {
   RoundRobinState,
   ServiceWorkQueue,
   PlannedWorkItem,

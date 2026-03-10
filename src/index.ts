@@ -33,6 +33,7 @@ import {
   recordResult,
   getProjectStats,
 } from './fix-history.js';
+import { requestVerification } from './verification-reporter.js';
 import { monitorAllServices } from './docker-monitor.js';
 import { correlateMonitorResult, createDockerGitHubIssues } from './issue-correlator.js';
 import { processDeployQueue, checkMergedPRsAndEnqueue } from './docker-deployer.js';
@@ -274,7 +275,11 @@ async function fixSingleIssue(
   recordResult(history, fixResult);
 
   if (['build_verified', 'test_verified', 'fix_applied'].includes(fixResult.status)) {
-    const prResult = await createPullRequest(fixResult);
+    let prResult = await createPullRequest(fixResult);
+    // PR 생성 성공 시 적합성 리포트 게시
+    if (prResult.status === 'pr_created') {
+      prResult = await requestVerification(parseResult, prResult);
+    }
     recordResult(history, prResult);
     saveHistory(history);
     printFixSummary(prResult);
@@ -321,6 +326,10 @@ async function fixAutoIssues(
   for (let i = 0; i < results.length; i++) {
     if (['build_verified', 'test_verified', 'fix_applied'].includes(results[i].status)) {
       results[i] = await createPullRequest(results[i]);
+      // PR 생성 성공 시 적합성 리포트 게시
+      if (results[i].status === 'pr_created') {
+        results[i] = await requestVerification(sorted[i], results[i]);
+      }
     }
     recordResult(history, results[i]);
   }
@@ -445,7 +454,11 @@ async function runBatch(projectName?: string): Promise<void> {
       recordResult(history, fixResult);
 
       if (['build_verified', 'test_verified', 'fix_applied'].includes(fixResult.status)) {
-        const prResult = await createPullRequest(fixResult);
+        let prResult = await createPullRequest(fixResult);
+        // PR 생성 성공 시 적합성 리포트 게시
+        if (prResult.status === 'pr_created') {
+          prResult = await requestVerification(issue, prResult);
+        }
         recordResult(history, prResult);
         totalSuccess++;
         console.log(`  #${issue.number} → ${prResult.prUrl ?? prResult.status}`);

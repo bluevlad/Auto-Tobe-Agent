@@ -81,7 +81,7 @@
   },
   "global_rules": {
     "max_concurrent_fixes": 1,
-    "branch_prefix": "fix",
+    "branch_prefix": "bugfix",
     "pr_template": "auto-fix",
     "require_clean_build": true,
     "require_existing_tests_pass": true

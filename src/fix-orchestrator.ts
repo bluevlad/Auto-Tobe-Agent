@@ -45,6 +45,23 @@ function toBranchSlug(title: string): string {
 }
 
 /**
+ * 이슈 제목/카테고리에서 커밋 scope를 추출합니다.
+ * COMMIT_CONVENTION 표준: fix(scope): subject
+ */
+function extractCommitScope(title: string): string {
+  const lower = title.toLowerCase();
+  if (lower.includes('security') || lower.includes('보안') || lower.includes('인증')) return 'security';
+  if (lower.includes('auth') || lower.includes('jwt') || lower.includes('cors')) return 'auth';
+  if (lower.includes('performance') || lower.includes('n+1') || lower.includes('성능')) return 'perf';
+  if (lower.includes('docker') || lower.includes('deploy') || lower.includes('배포')) return 'ops';
+  if (lower.includes('frontend') || lower.includes('프론트') || lower.includes('ui')) return 'ui';
+  if (lower.includes('test') || lower.includes('테스트')) return 'test';
+  if (lower.includes('api') || lower.includes('endpoint')) return 'api';
+  if (lower.includes('db') || lower.includes('query') || lower.includes('sql')) return 'db';
+  return 'core';
+}
+
+/**
  * Claude Code CLI 호출용 프롬프트를 구성합니다.
  */
 function buildFixPrompt(issue: ParsedIssue, project: ResolvedProject): string {
@@ -302,10 +319,15 @@ async function commitChanges(
   await execAsync('git add -A', { cwd });
 
   const slug = toBranchSlug(title);
-  const commitMsg = `fix(#${issueNumber}): ${slug}
+  // 커밋 메시지: COMMIT_CONVENTION 표준 준수
+  // type(scope): subject + fixes #N in footer
+  const scope = extractCommitScope(title);
+  const subject = slug.replace(/-/g, ' ');
+  const commitMsg = `fix(${scope}): ${subject}
 
 Auto-fixed by Auto-Tobe-Agent
-Closes #${issueNumber}
+
+fixes #${issueNumber}
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`;
 
