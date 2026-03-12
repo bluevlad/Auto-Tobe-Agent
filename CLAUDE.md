@@ -85,7 +85,48 @@ npm run dev          # 개발 모드 (watch)
 
 ## 관련 프로젝트
 
-| 프로젝트 | 역할 |
-|----------|------|
-| Autonomous-QA-Agent | QA Inspector (이슈 발견) |
-| hopenvision | 첫 대상 프로젝트 |
+| 프로젝트 | 역할 | 경로 |
+|----------|------|------|
+| Autonomous-QA-Agent | QA Inspector (이슈 발견) | C:/GIT/Autonomous-QA-Agent |
+| Claude-Opus-bluevlad | 표준/규칙 Hub | C:/GIT/Claude-Opus-bluevlad |
+| hopenvision | 첫 대상 프로젝트 | C:/GIT/hopenvision |
+
+## 참조 표준
+
+- Commit: C:/GIT/Claude-Opus-bluevlad/standards/git/COMMIT_CONVENTION.md
+- Branch: C:/GIT/Claude-Opus-bluevlad/standards/git/BRANCH_CONVENTION.md
+- Issue Fix: C:/GIT/Claude-Opus-bluevlad/standards/claude-code/ISSUE_FIX_WORKFLOW.md
+
+## Fix 커밋 오류 추적
+
+> 상세: [FIX_COMMIT_TRACKING_GUIDE.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/git/FIX_COMMIT_TRACKING_GUIDE.md) | [ERROR_TAXONOMY.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/git/ERROR_TAXONOMY.md)
+
+`fix:` 커밋 시 footer에 오류 추적 메타데이터를 **필수** 포함합니다.
+
+### 이 프로젝트에서 자주 발생하는 Root-Cause
+
+| Root-Cause | 설명 | 예방 |
+|-----------|------|------|
+| `import-error` | ESM/CJS 호환성, 동적 import 필요 | CJS 패키지는 `await import()` 사용, 확장자 명시 |
+| `shell-compat` | PowerShell/bash 경로 차이 | 경로는 forward slash 통일, `path.join()` 사용 |
+| `async-handling` | Promise 미처리, await 누락 | `try/catch`로 감싸기, unhandledRejection 핸들러 |
+| `type-mismatch` | TypeScript 타입 불일치, any 남용 | strict 모드, unknown 우선 사용 |
+| `env-assumption` | GitHub Actions vs 로컬 환경 차이 | `process.env` 접근 시 fallback 또는 에러 throw |
+| `config-format` | JSON/YAML 파싱 오류 | Zod 스키마로 설정 파일 검증 |
+
+### 예시
+
+```
+fix(scheduler): GitHub Actions 환경에서 dotenv 로드 실패
+
+- ESM 프로젝트에서 dotenv를 정적 import하여 ERR_REQUIRE_ESM 발생
+- await import('dotenv')로 동적 import 전환
+
+Root-Cause: import-error
+Error-Category: compat-issue
+Affected-Layer: backend/config
+Recurrence: first
+Prevention: ESM 프로젝트에서 CJS 패키지는 반드시 동적 import 사용
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
