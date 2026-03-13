@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "apiUrl": "http://localhost:9095/api",
+  "apiKey": "${QA_DASHBOARD_API_KEY}",
+  "timeoutMs": 10000
+}

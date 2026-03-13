@@ -38,6 +38,7 @@ import { monitorAllServices } from './docker-monitor.js';
 import { correlateMonitorResult, createDockerGitHubIssues } from './issue-correlator.js';
 import { processDeployQueue, checkMergedPRsAndEnqueue } from './docker-deployer.js';
 import { executeRoundRobinBatch, checkScheduleAdjustment } from './round-robin-scheduler.js';
+import { flushPendingReports } from './dashboard-reporter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -350,6 +351,12 @@ async function runBatch(projectName?: string): Promise<void> {
   console.log(`\n[batch] Auto-Tobe-Agent Batch Run`);
   console.log(`  Started: ${timestamp}`);
   console.log('='.repeat(50));
+
+  // Dashboard 전송 실패 큐 재전송
+  const flushResult = await flushPendingReports();
+  if (flushResult.sent > 0 || flushResult.failed > 0) {
+    console.log(`  [dashboard] Flushed: ${flushResult.sent} sent, ${flushResult.failed} remaining`);
+  }
 
   const projectsConfig = loadConfig<ProjectsConfig>('configs/projects.json');
 

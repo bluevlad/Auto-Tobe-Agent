@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import type { FixResult } from './types/index.js';
+import { reportToDashboard } from './dashboard-reporter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -81,7 +82,8 @@ export function isAlreadyProcessed(
 }
 
 /**
- * FixResult를 이력에 기록합니다.
+ * FixResult를 이력에 기록하고, Dashboard API로도 전송합니다.
+ * Dashboard 전송 실패는 로컬 이력 기록에 영향을 주지 않습니다.
  */
 export function recordResult(
   history: FixHistoryFile,
@@ -100,6 +102,11 @@ export function recordResult(
     durationMs: result.durationMs,
   };
   history.lastRunAt = new Date().toISOString();
+
+  // Dashboard API 비동기 전송 (실패해도 로컬 이력은 유지)
+  reportToDashboard(result).catch(() => {
+    // 전송 실패는 dashboard-reporter 내부에서 큐에 저장됨
+  });
 }
 
 /**
