@@ -35,6 +35,8 @@ export interface QaAgentMeta {
   auto_fixable: boolean;
   fix_hint?: string;
   verification?: string;
+  /** QA Agent 실행 Run ID (점검→수정→확인 추적용) */
+  runId?: string;
 }
 
 /**
@@ -66,6 +68,8 @@ export interface ParsedIssue {
     affectedFiles?: string[];
     codeSnippets?: string[];
   };
+  /** QA Agent Run ID (점검→수정→확인 추적용) */
+  sourceRunId?: string;
   /** 이슈 생성 시각 */
   createdAt: string;
   /** 수정 가능 여부 판단 */

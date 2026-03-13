@@ -55,6 +55,9 @@ const QA_META_RE = /<!--\s*QA-AGENT-META\s*\n([\s\S]*?)\n\s*-->/;
 /** 마크다운 ## 섹션 분리 */
 const SECTION_RE = /^## (.+)$/gm;
 
+/** Run ID 추출 (본문 테이블 내 Run ID 패턴) */
+const RUN_ID_RE = /Run\s*ID[^|]*\|\s*`?(\d{8}-\d{6})`?/;
+
 /** 파일 경로 추출 (백틱 내 경로) */
 const FILE_PATH_RE = /`([\w\-/.]+\.(?:java|ts|tsx|js|jsx|py|groovy|yml|yaml|json|xml|sql|md))`/g;
 
@@ -137,10 +140,28 @@ function extractQaAgentMeta(body: string): QaAgentMeta | undefined {
   if (!match) return undefined;
 
   try {
-    return JSON.parse(match[1]) as QaAgentMeta;
+    const meta = JSON.parse(match[1]) as QaAgentMeta;
+
+    // QA-AGENT-META에 runId가 없으면 본문 테이블에서 추출 시도
+    if (!meta.runId) {
+      const runIdMatch = body.match(RUN_ID_RE);
+      if (runIdMatch) {
+        meta.runId = runIdMatch[1];
+      }
+    }
+
+    return meta;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * 본문 테이블에서 Run ID를 추출합니다 (QA-AGENT-META가 없는 경우 fallback).
+ */
+function extractRunIdFromBody(body: string): string | undefined {
+  const match = body.match(RUN_ID_RE);
+  return match ? match[1] : undefined;
 }
 
 /**
@@ -243,6 +264,9 @@ export async function parseIssue(
     const meta = extractQaAgentMeta(issue.body);
     const parsedContent = parseBodyContent(issue.body);
 
+    // QA-AGENT-META 또는 본문에서 runId 추출
+    const sourceRunId = meta?.runId ?? extractRunIdFromBody(issue.body);
+
     return {
       number: issue.number,
       title: issue.title,
@@ -254,6 +278,7 @@ export async function parseIssue(
       category: meta?.category ?? category,
       meta,
       parsedContent,
+      sourceRunId,
       createdAt: issue.createdAt,
       isAutoFixable: determineAutoFixable(priority, category, meta),
     };

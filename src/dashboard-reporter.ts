@@ -71,7 +71,7 @@ function toPayload(result: FixResult): Record<string, unknown> {
   return {
     issueNumber: result.issueNumber,
     projectName: result.project,
-    sourceRunId: null,
+    sourceRunId: result.sourceRunId ?? null,
     priority: result.priority,
     category: result.category,
     strategy: result.strategy,

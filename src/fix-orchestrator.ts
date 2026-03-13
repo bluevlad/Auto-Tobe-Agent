@@ -375,6 +375,7 @@ function createInitialResult(
     verifications: [],
     startedAt: new Date().toISOString(),
     retryCount: 0,
+    sourceRunId: issue.sourceRunId,
   };
 }
 

@@ -54,6 +54,8 @@ export interface FixResult {
   completedAt?: string;
   durationMs?: number;
   retryCount: number;
+  /** QA Agent Run ID — 점검→수정→확인 lifecycle 추적용 */
+  sourceRunId?: string;
 }
 
 /** 배치 수정 결과 */
