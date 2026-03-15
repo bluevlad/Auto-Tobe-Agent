@@ -148,12 +148,12 @@ function invokeClaudeCode(
       'Bash(git:*)', 'Bash(npm:*)', 'Bash(npx:*)',
       'Bash(./gradlew:*)', 'Bash(gradle:*)',
     ];
-    const child = spawn('claude', [
+    const claudePath = `${process.env.HOME}/.local/bin/claude`;
+    const child = spawn(claudePath, [
       '-p',
       '--allowedTools', allowedTools.join(','),
     ], {
       cwd,
-      shell: true,
       env: {
         ...process.env,
         PATH: `${process.env.HOME}/.local/bin:${process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin'}`,
