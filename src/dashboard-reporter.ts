@@ -53,7 +53,13 @@ export function loadDashboardConfig(): DashboardConfig {
   const configPath = resolve(__dirname, '..', 'configs', 'dashboard.json');
   if (existsSync(configPath)) {
     const content = readFileSync(configPath, 'utf-8');
-    return JSON.parse(content) as DashboardConfig;
+    const config = JSON.parse(content) as DashboardConfig;
+
+    // JSON 값에 ${ENV_VAR} 패턴이 있으면 환경변수로 치환
+    config.apiKey = resolveEnvVar(config.apiKey);
+    config.apiUrl = resolveEnvVar(config.apiUrl);
+
+    return config;
   }
 
   return {
@@ -62,6 +68,15 @@ export function loadDashboardConfig(): DashboardConfig {
     apiKey: '',
     timeoutMs: 10000,
   };
+}
+
+/**
+ * 문자열 내 ${ENV_VAR} 패턴을 환경변수 값으로 치환합니다.
+ */
+function resolveEnvVar(value: string): string {
+  return value.replace(/\$\{(\w+)\}/g, (_, name: string) => {
+    return process.env[name] ?? '';
+  });
 }
 
 /**

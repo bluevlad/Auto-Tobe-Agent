@@ -143,7 +143,15 @@ function invokeClaudeCode(
   timeoutMs: number,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('claude', ['-p'], {
+    const allowedTools = [
+      'Read', 'Edit', 'Write', 'Glob', 'Grep',
+      'Bash(git:*)', 'Bash(npm:*)', 'Bash(npx:*)',
+      'Bash(./gradlew:*)', 'Bash(gradle:*)',
+    ];
+    const child = spawn('claude', [
+      '-p',
+      '--allowedTools', allowedTools.join(','),
+    ], {
       cwd,
       shell: true,
       env: {

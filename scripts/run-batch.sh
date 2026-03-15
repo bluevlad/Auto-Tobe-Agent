@@ -31,6 +31,13 @@ LOG_FILE="$LOG_DIR/batch-${DATE_TAG}-${TIME_TAG}.log"
 # --- PATH 보강 (launchd 환경에서 필요) ---
 export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:$PATH"
 
+# --- Dashboard API 환경변수 (configs/dashboard.json의 환경변수 참조용) ---
+# QA_DASHBOARD_API_KEY가 미설정이면 Docker 컨테이너에서 가져옴
+if [ -z "${QA_DASHBOARD_API_KEY:-}" ]; then
+  QA_DASHBOARD_API_KEY="$(docker exec qa-dashboard-api printenv QA_DASHBOARD_API_KEY 2>/dev/null || true)"
+  export QA_DASHBOARD_API_KEY
+fi
+
 # --- 실행 ---
 echo "======================================" | tee -a "$LOG_FILE"
 echo "Auto-Tobe-Agent Batch Run"            | tee -a "$LOG_FILE"
