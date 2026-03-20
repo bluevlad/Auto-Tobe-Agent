@@ -129,6 +129,26 @@ export function resetFailedEntry(
 }
 
 /**
+ * 프로젝트의 모든 실패 이력을 초기화합니다.
+ * 반환값: 삭제된 엔트리 수
+ */
+export function resetAllFailed(
+  history: FixHistoryFile,
+  project?: string,
+): number {
+  let count = 0;
+  for (const [key, entry] of Object.entries(history.entries)) {
+    if (entry.status === 'failed') {
+      if (!project || entry.project === project) {
+        delete history.entries[key];
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+/**
  * 프로젝트의 처리 이력 통계를 반환합니다.
  */
 export function getProjectStats(

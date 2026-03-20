@@ -18,10 +18,15 @@
       },
       "commands": {
         "build_backend": "./gradlew build",
-        "build_frontend": "npm run build",
+        "build_backend_cwd": "api/",
         "test_backend": "./gradlew test",
+        "test_backend_cwd": "api/",
+        "build_frontend": "npm run build",
+        "build_frontend_cwd": "web-admin/",
         "test_frontend": "npm test",
-        "lint_frontend": "npm run lint"
+        "test_frontend_cwd": "web-admin/",
+        "lint_frontend": "npm run lint",
+        "lint_frontend_cwd": "web-admin/"
       },
       "ports": {
         "frontend": 4060,

@@ -11,7 +11,9 @@
  *   npm start -- fix <project> <issue#>    # 단일 이슈 수정
  *   npm start -- fix <project> --auto      # 자동 수정 가능한 이슈 일괄 수정
  *   npm start -- batch [project]           # 배치 모드 (이력 관리 포함)
+ *   npm start -- preflight <project>       # 수정 전 환경 검증
  *   npm start -- history [project]         # 처리 이력 조회
+ *   npm start -- history --reset-failed [project]  # 실패 이력 초기화
  *   npm start -- docker-monitor [project]  # Docker 서비스 모니터링
  *   npm start -- docker-deploy [project]   # Docker 배포 큐 처리
  *   npm start -- ops [project]             # 전체 운영 (모니터 → 수정 → 배포)
@@ -24,7 +26,7 @@ import { dirname, resolve } from 'path';
 import type { ProjectsConfig, ApprovalPolicyConfig, Priority, ParsedIssue, ScheduleConfig } from './types/index.js';
 import { fetchOpenIssueNumbers, parseIssue, isParsedIssue, sortByPriority } from './issue-parser.js';
 import { resolveProject, resolveAllProjects } from './project-resolver.js';
-import { orchestrateFix, orchestrateBatchFix } from './fix-orchestrator.js';
+import { orchestrateFix, orchestrateBatchFix, preflightCheck } from './fix-orchestrator.js';
 import { createPullRequest } from './pr-creator.js';
 import {
   loadHistory,
@@ -32,6 +34,7 @@ import {
   isAlreadyProcessed,
   recordResult,
   getProjectStats,
+  resetAllFailed,
 } from './fix-history.js';
 import { requestVerification } from './verification-reporter.js';
 import { monitorAllServices } from './docker-monitor.js';
@@ -116,15 +119,17 @@ function showStatus(): void {
 
   console.log('='.repeat(50));
   console.log('\nCommands:');
-  console.log('  npm start -- scan <project>            이슈 스캔');
-  console.log('  npm start -- resolve <project>         프로젝트 상태');
-  console.log('  npm start -- fix <project> <issue#>    단일 이슈 수정');
-  console.log('  npm start -- fix <project> --auto      자동 일괄 수정');
-  console.log('  npm start -- batch [project]           배치 모드 (이력 관리)');
-  console.log('  npm start -- history [project]         처리 이력 조회');
-  console.log('  npm start -- docker-monitor [project]  Docker 서비스 모니터링');
-  console.log('  npm start -- docker-deploy [project]   Docker 배포 큐 처리');
-  console.log('  npm start -- ops [project]             전체 운영 (모니터+수정+배포)');
+  console.log('  npm start -- scan <project>                  이슈 스캔');
+  console.log('  npm start -- resolve <project>               프로젝트 상태');
+  console.log('  npm start -- preflight <project>             수정 전 환경 검증');
+  console.log('  npm start -- fix <project> <issue#>          단일 이슈 수정');
+  console.log('  npm start -- fix <project> --auto            자동 일괄 수정');
+  console.log('  npm start -- batch [project]                 배치 모드 (이력 관리)');
+  console.log('  npm start -- history [project]               처리 이력 조회');
+  console.log('  npm start -- history --reset-failed [project]  실패 이력 초기화');
+  console.log('  npm start -- docker-monitor [project]        Docker 서비스 모니터링');
+  console.log('  npm start -- docker-deploy [project]         Docker 배포 큐 처리');
+  console.log('  npm start -- ops [project]                   전체 운영 (모니터+수정+배포)');
 }
 
 /**
@@ -401,6 +406,22 @@ async function runBatch(projectName?: string): Promise<void> {
 
   // 순차 처리 경로 (하위 호환)
   console.log(`  Mode: Sequential`);
+
+  // Pre-flight 검증 (첫 번째 프로젝트로 환경 검증)
+  if (targetProjects.length > 0) {
+    const firstProject = await resolveProject(targetProjects[0]);
+    const preflight = await preflightCheck(firstProject);
+    if (!preflight.ok) {
+      console.log('\n  [preflight] 환경 검증 실패:');
+      for (const err of preflight.errors) {
+        console.log(`    ERROR: ${err}`);
+      }
+      console.log('\n  배치를 중단합니다. 문제를 해결한 후 다시 시도하세요.');
+      return;
+    }
+    console.log('  [preflight] 환경 검증 통과');
+  }
+
   const history = loadHistory();
   const maxPerService = fixConfig?.max_issues_per_service ?? Infinity;
 
@@ -490,6 +511,29 @@ async function runBatch(projectName?: string): Promise<void> {
   console.log(`  Failed: ${totalFailed}`);
   console.log(`  Skipped (already done): ${totalSkipped}`);
   console.log(`  Completed: ${new Date().toISOString()}`);
+}
+
+/**
+ * preflight 모드: 수정 실행 전 환경을 사전 검증합니다.
+ */
+async function runPreflight(projectName: string): Promise<void> {
+  console.log(`\n[preflight] ${projectName} 환경 검증 시작`);
+  console.log('='.repeat(50));
+
+  const project = await resolveProject(projectName);
+  const result = await preflightCheck(project);
+
+  if (result.ok) {
+    console.log('  ALL CHECKS PASSED');
+    console.log('  환경이 정상입니다. 수정 배치를 실행할 수 있습니다.');
+  } else {
+    console.log(`  ${result.errors.length}건의 문제가 발견되었습니다:\n`);
+    for (const err of result.errors) {
+      console.log(`  ERROR: ${err}`);
+    }
+    console.log('\n  위 문제를 해결한 후 다시 시도하세요.');
+    process.exit(1);
+  }
 }
 
 /**
@@ -715,8 +759,28 @@ async function main(): Promise<void> {
         await runBatch(target);
         break;
 
+      case 'preflight':
+        if (!target) {
+          console.error('Usage: npm start -- preflight <project>');
+          process.exit(1);
+        }
+        await runPreflight(target);
+        break;
+
       case 'history':
-        showHistory(target);
+        if (target === '--reset-failed') {
+          const resetProject = args[2]; // optional project filter
+          const history = loadHistory();
+          const count = resetAllFailed(history, resetProject);
+          if (count > 0) {
+            saveHistory(history);
+            console.log(`[history] ${count}건의 실패 이력 초기화 완료${resetProject ? ` (project: ${resetProject})` : ''}`);
+          } else {
+            console.log('[history] 초기화할 실패 이력이 없습니다.');
+          }
+        } else {
+          showHistory(target);
+        }
         break;
 
       case 'docker-monitor':

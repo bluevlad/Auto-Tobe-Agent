@@ -15,11 +15,17 @@ export interface DockerComposeConfig {
 /** 빌드/테스트 명령어 */
 export interface ProjectCommands {
   build_backend: string;
+  build_backend_cwd?: string;
   build_frontend?: string;
+  build_frontend_cwd?: string;
   test_backend: string;
+  test_backend_cwd?: string;
   test_frontend?: string;
+  test_frontend_cwd?: string;
   lint_frontend?: string;
+  lint_frontend_cwd?: string;
   lint_backend?: string;
+  lint_backend_cwd?: string;
 }
 
 /** 서비스 포트 */

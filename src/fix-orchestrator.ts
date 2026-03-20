@@ -1,6 +1,6 @@
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import type {
@@ -17,6 +17,22 @@ const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * Java 프로젝트 빌드를 위한 JAVA_HOME 자동 감지.
+ * 환경변수에 없으면 Homebrew OpenJDK 경로를 탐색합니다.
+ */
+function ensureJavaEnv(): Record<string, string> {
+  const env = { ...process.env } as Record<string, string>;
+  if (!env.JAVA_HOME) {
+    const brewJdk = '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home';
+    if (existsSync(brewJdk)) {
+      env.JAVA_HOME = brewJdk;
+      env.PATH = `${brewJdk}/bin:${env.PATH ?? ''}`;
+    }
+  }
+  return env;
+}
+
 let cachedPolicy: ApprovalPolicyConfig | null = null;
 
 /**
@@ -28,6 +44,90 @@ function loadApprovalPolicy(): ApprovalPolicyConfig {
   const content = readFileSync(configPath, 'utf-8');
   cachedPolicy = JSON.parse(content) as ApprovalPolicyConfig;
   return cachedPolicy;
+}
+
+/** Claude CLI 에러 타입 */
+type FixErrorType = 'auth_error' | 'path_error' | 'timeout' | 'unknown';
+
+/** Claude CLI 에러를 분류합니다. */
+function classifyError(errorMessage: string): FixErrorType {
+  if (/401|authentication_error|unauthorized|api.key/i.test(errorMessage)) {
+    return 'auth_error';
+  }
+  if (/no such file|not found|ENOENT|command not found/i.test(errorMessage)) {
+    return 'path_error';
+  }
+  if (/timed?\s*out|timeout/i.test(errorMessage)) {
+    return 'timeout';
+  }
+  return 'unknown';
+}
+
+/** Pre-flight 검증 결과 */
+interface PreflightResult {
+  ok: boolean;
+  errors: string[];
+}
+
+/**
+ * 수정 실행 전 환경을 사전 검증합니다.
+ */
+export async function preflightCheck(project: ResolvedProject): Promise<PreflightResult> {
+  const errors: string[] = [];
+
+  // 1. Claude CLI 바이너리 존재 + OAuth 인증 상태 확인
+  const claudePath = `${process.env.HOME}/.local/bin/claude`;
+  if (!existsSync(claudePath)) {
+    errors.push(`Claude CLI 바이너리를 찾을 수 없습니다: ${claudePath}`);
+  } else {
+    try {
+      await execAsync(`"${claudePath}" --version`, { timeout: 10_000 });
+    } catch {
+      errors.push('Claude CLI 실행 불가. OAuth 로그인 상태를 확인하세요 (claude login).');
+    }
+  }
+
+  // 3. 프로젝트 로컬 경로
+  const cwd = project.config.local_path;
+  if (!project.localPathExists) {
+    errors.push(`프로젝트 로컬 경로가 존재하지 않습니다: ${cwd}`);
+  }
+
+  // 4. Java Runtime 확인 (Gradle 프로젝트)
+  if (project.config.tech_stack.build_tool === 'gradle' || project.config.tech_stack.build_tool === 'maven') {
+    try {
+      await execAsync('java --version', { timeout: 5_000 });
+    } catch {
+      errors.push('Java Runtime이 설치되어 있지 않습니다. brew install openjdk@21 후 JAVA_HOME을 설정하세요.');
+    }
+  }
+
+  // 5. 빌드 도구 존재 확인 (cwd 반영)
+  if (project.localPathExists) {
+    const commands = project.config.commands;
+    const checks: Array<{ cmd: string; cwdSuffix?: string }> = [
+      { cmd: commands.build_backend, cwdSuffix: commands.build_backend_cwd },
+      { cmd: commands.test_backend, cwdSuffix: commands.test_backend_cwd },
+    ];
+
+    for (const check of checks) {
+      // gradlew 파일 존재 확인
+      const match = check.cmd.match(/^\.\/(\S+)/);
+      if (match) {
+        const toolPath = resolve(cwd, check.cwdSuffix ?? '', match[1]);
+        if (!existsSync(toolPath)) {
+          errors.push(`빌드 도구를 찾을 수 없습니다: ${toolPath} (명령: ${check.cmd})`);
+        }
+      }
+    }
+
+    // 5. Git clean working tree (경고만 — untracked 파일은 fix 브랜치에 영향 없음)
+    if (project.gitStatus && !project.gitStatus.isClean) {
+      console.log(`  WARN: 프로젝트 working tree가 clean하지 않습니다 (branch: ${project.gitStatus.currentBranch})`);
+    }
+  }
+
+  return { ok: errors.length === 0, errors };
 }
 
 /**
@@ -276,9 +376,21 @@ async function runVerification(
   const startTime = Date.now();
   const adapted = adaptCommandForPlatform(command);
 
+  // gradlew 실행 권한 보장 (git reset 후 권한 소실 방어)
+  const gradlewMatch = adapted.match(/^\.\/(\S+)/);
+  if (gradlewMatch) {
+    const toolPath = resolve(cwd, gradlewMatch[1]);
+    if (existsSync(toolPath)) {
+      try {
+        await execAsync(`chmod +x "${toolPath}"`);
+      } catch { /* ignore */ }
+    }
+  }
+
   try {
     const { stdout } = await execAsync(adapted, {
       cwd,
+      env: ensureJavaEnv(),
       timeout: 300_000, // 5분
       maxBuffer: 10 * 1024 * 1024,
     });
@@ -483,11 +595,14 @@ export async function orchestrateFix(
 
       // 5. 빌드 검증
       if (policyConfig.global_rules.require_clean_build) {
-        console.log(`  Running build: ${project.config.commands.build_backend}`);
+        const buildCwd = project.config.commands.build_backend_cwd
+          ? resolve(cwd, project.config.commands.build_backend_cwd)
+          : cwd;
+        console.log(`  Running build: ${project.config.commands.build_backend} (cwd: ${buildCwd})`);
         const buildResult = await runVerification(
           'build',
           project.config.commands.build_backend,
-          cwd,
+          buildCwd,
         );
         result.verifications.push(buildResult);
 
@@ -504,11 +619,14 @@ export async function orchestrateFix(
 
       // 6. 테스트 검증
       if (policyConfig.global_rules.require_existing_tests_pass) {
-        console.log(`  Running tests: ${project.config.commands.test_backend}`);
+        const testCwd = project.config.commands.test_backend_cwd
+          ? resolve(cwd, project.config.commands.test_backend_cwd)
+          : cwd;
+        console.log(`  Running tests: ${project.config.commands.test_backend} (cwd: ${testCwd})`);
         const testResult = await runVerification(
           'test',
           project.config.commands.test_backend,
-          cwd,
+          testCwd,
         );
         result.verifications.push(testResult);
 
@@ -554,24 +672,53 @@ export async function orchestrateFix(
 
 /**
  * 여러 이슈를 우선순위 순서대로 수정합니다.
- * global_rules.max_concurrent_fixes에 따라 동시 수정 수를 제한합니다.
+ * 구조적 실패 감지 시 배치를 조기 중단합니다.
  */
 export async function orchestrateBatchFix(
   issues: ParsedIssue[],
   project: ResolvedProject,
 ): Promise<FixResult[]> {
   const results: FixResult[] = [];
+  let consecutiveAuthErrors = 0;
+  let consecutivePathErrors = 0;
 
   console.log(`\n[batch] ${issues.length}건 수정 시작 (project: ${project.name})`);
 
-  // 현재는 순차 처리 (max_concurrent_fixes: 1)
   for (const issue of issues) {
     const result = await orchestrateFix(issue, project);
     results.push(result);
 
-    // 실패한 이슈가 있어도 다음 이슈 계속 처리
-    if (result.status === 'failed') {
-      console.log(`  [batch] #${issue.number} failed, continuing...`);
+    if (result.status === 'failed' && result.error) {
+      const errorType = classifyError(result.error);
+
+      if (errorType === 'auth_error') {
+        consecutiveAuthErrors++;
+        consecutivePathErrors = 0;
+      } else if (errorType === 'path_error') {
+        consecutivePathErrors++;
+        consecutiveAuthErrors = 0;
+      } else {
+        consecutiveAuthErrors = 0;
+        consecutivePathErrors = 0;
+      }
+
+      // 연속 2건 auth_error → 배치 중단
+      if (consecutiveAuthErrors >= 2) {
+        console.log(`\n  [batch] ABORT: 연속 ${consecutiveAuthErrors}건 인증 에러. ANTHROPIC_API_KEY 확인 필요.`);
+        break;
+      }
+
+      // 연속 3건 path_error → 배치 중단
+      if (consecutivePathErrors >= 3) {
+        console.log(`\n  [batch] ABORT: 연속 ${consecutivePathErrors}건 경로 에러. 프로젝트 설정 확인 필요.`);
+        break;
+      }
+
+      console.log(`  [batch] #${issue.number} failed (${errorType}), continuing...`);
+    } else {
+      // 성공 또는 스킵 시 카운터 리셋
+      consecutiveAuthErrors = 0;
+      consecutivePathErrors = 0;
     }
   }
 
@@ -581,4 +728,4 @@ export async function orchestrateBatchFix(
 }
 
 // export for testing
-export { buildFixPrompt, toBranchSlug, loadApprovalPolicy };
+export { buildFixPrompt, toBranchSlug, loadApprovalPolicy, classifyError };
