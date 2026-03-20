@@ -35,6 +35,42 @@ function ensureJavaEnv(): Record<string, string> {
   return env;
 }
 
+/**
+ * Claude Code CLI 바이너리 경로를 OS에 따라 결정합니다.
+ *
+ * 탐색 순서:
+ * 1. 환경변수 CLAUDE_CLI_PATH (명시적 오버라이드)
+ * 2. $HOME/.local/bin/claude (macOS/Linux 기본)
+ * 3. %APPDATA%\npm\claude.cmd (Windows npm global)
+ * 4. PATH에서 탐색 (which/where)
+ */
+function resolveClaudeCliPath(): string {
+  // 1. 환경변수 오버라이드
+  if (process.env.CLAUDE_CLI_PATH && existsSync(process.env.CLAUDE_CLI_PATH)) {
+    return process.env.CLAUDE_CLI_PATH;
+  }
+
+  // 2. OS별 기본 경로
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
+
+  if (process.platform === 'win32') {
+    const candidates = [
+      resolve(home, '.local', 'bin', 'claude.exe'),
+      resolve(process.env.APPDATA ?? '', 'npm', 'claude.cmd'),
+      resolve(home, '.local', 'bin', 'claude'),
+    ];
+    for (const p of candidates) {
+      if (existsSync(p)) return p;
+    }
+  } else {
+    const unixPath = resolve(home, '.local', 'bin', 'claude');
+    if (existsSync(unixPath)) return unixPath;
+  }
+
+  // 3. fallback: PATH에 있다고 가정
+  return 'claude';
+}
+
 let cachedPolicy: ApprovalPolicyConfig | null = null;
 
 /**
@@ -78,9 +114,9 @@ export async function preflightCheck(project: ResolvedProject): Promise<Prefligh
   const errors: string[] = [];
 
   // 1. Claude CLI 바이너리 존재 + OAuth 인증 상태 확인
-  const claudePath = `${process.env.HOME}/.local/bin/claude`;
-  if (!existsSync(claudePath)) {
-    errors.push(`Claude CLI 바이너리를 찾을 수 없습니다: ${claudePath}`);
+  const claudePath = resolveClaudeCliPath();
+  if (claudePath === 'claude' || !existsSync(claudePath)) {
+    errors.push(`Claude CLI 바이너리를 찾을 수 없습니다. CLAUDE_CLI_PATH 환경변수를 설정하거나 claude를 설치하세요.`);
   } else {
     try {
       await execAsync(`"${claudePath}" --version`, { timeout: 10_000 });
@@ -378,13 +414,16 @@ function invokeClaudeCode(
   cwd: string,
   timeoutMs: number,
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise((promiseResolve, promiseReject) => {
     const allowedTools = [
       'Read', 'Edit', 'Write', 'Glob', 'Grep',
       'Bash(git:*)', 'Bash(npm:*)', 'Bash(npx:*)',
       'Bash(./gradlew:*)', 'Bash(gradle:*)',
     ];
-    const claudePath = `${process.env.HOME}/.local/bin/claude`;
+    const claudePath = resolveClaudeCliPath();
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
+    const sep = process.platform === 'win32' ? ';' : ':';
+    const localBin = resolve(home, '.local', 'bin');
     const child = spawn(claudePath, [
       '-p',
       '--allowedTools', allowedTools.join(','),
@@ -392,8 +431,9 @@ function invokeClaudeCode(
       cwd,
       env: {
         ...process.env,
-        PATH: `${process.env.HOME}/.local/bin:${process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin'}`,
+        PATH: `${localBin}${sep}${process.env.PATH ?? ''}`,
       },
+      shell: process.platform === 'win32',
     });
 
     let stdout = '';
@@ -416,11 +456,11 @@ function invokeClaudeCode(
     child.on('close', (code: number | null) => {
       clearTimeout(timer);
       if (timedOut) {
-        reject(new Error(`Claude Code CLI timed out after ${timeoutMs}ms`));
+        promiseReject(new Error(`Claude Code CLI timed out after ${timeoutMs}ms`));
       } else if (code === 0) {
-        resolve(stdout);
+        promiseResolve(stdout);
       } else {
-        reject(
+        promiseReject(
           new Error(`Claude Code CLI exited with code ${code}: ${stderr || stdout}`),
         );
       }
@@ -428,7 +468,7 @@ function invokeClaudeCode(
 
     child.on('error', (err: Error) => {
       clearTimeout(timer);
-      reject(new Error(`Claude Code CLI spawn error: ${err.message}`));
+      promiseReject(new Error(`Claude Code CLI spawn error: ${err.message}`));
     });
 
     child.stdin.write(prompt);
