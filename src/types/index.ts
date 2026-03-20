@@ -23,6 +23,8 @@ export type {
   FixStatus,
   ModifiedFile,
   VerificationResult,
+  ConflictCheckResult,
+  FileConflictInfo,
   FixResult,
   BatchFixResult,
 } from './fix-result.js';

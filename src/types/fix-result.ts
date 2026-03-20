@@ -34,6 +34,12 @@ export interface VerificationResult {
   durationMs: number;
 }
 
+/** 파일 수준 충돌 감지 결과 */
+export interface FileConflictInfo {
+  conflictingFiles: string[];
+  conflictingPRs: Array<{ number: number; title: string }>;
+}
+
 /** 단일 이슈 수정 결과 */
 export interface FixResult {
   issueNumber: number;
@@ -54,8 +60,19 @@ export interface FixResult {
   completedAt?: string;
   durationMs?: number;
   retryCount: number;
+  /** 파일 수준 충돌 감지 결과 (열린 PR과 겹치는 파일) */
+  fileConflicts?: FileConflictInfo;
   /** QA Agent Run ID — 점검→수정→확인 lifecycle 추적용 */
   sourceRunId?: string;
+}
+
+/** Pre-flight 충돌 검증 결과 */
+export interface ConflictCheckResult {
+  safe: boolean;
+  reason?: string;
+  action: 'proceed' | 'skip' | 'defer';
+  activeBranch?: string;
+  recentCommitCount?: number;
 }
 
 /** 배치 수정 결과 */

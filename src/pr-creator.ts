@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import type {
   FixResult,
+  FileConflictInfo,
   ApprovalPolicyConfig,
   ModifiedFile,
 } from './types/index.js';
@@ -139,12 +140,17 @@ async function createGhPr(
   reviewers: string[],
   labels: string[],
   cwd: string,
+  draft: boolean = false,
 ): Promise<{ url: string; number: number }> {
   // body를 환경변수로 전달하여 shell 이스케이핑 문제 회피
   const escapedTitle = title.replace(/"/g, '\\"');
   const escapedBody = body.replace(/"/g, '\\"').replace(/\n/g, '\\n');
 
   let cmd = `gh pr create --repo ${repo} --title "${escapedTitle}" --body "${escapedBody}" --base ${baseBranch}`;
+
+  if (draft) {
+    cmd += ' --draft';
+  }
 
   if (reviewers.length > 0) {
     cmd += ` --reviewer ${reviewers.join(',')}`;
@@ -166,6 +172,45 @@ async function createGhPr(
   const prNumber = prNumberMatch ? parseInt(prNumberMatch[1], 10) : 0;
 
   return { url: prUrl, number: prNumber };
+}
+
+/**
+ * 파일 충돌 경고 코멘트를 PR에 추가합니다.
+ *
+ * @see AGENT_CONFLICT_PREVENTION_GUIDE.md §2.3
+ */
+async function addConflictWarningComment(
+  repo: string,
+  prNumber: number,
+  conflicts: FileConflictInfo,
+): Promise<void> {
+  const lines: string[] = [];
+  lines.push('## :warning: 파일 충돌 감지');
+  lines.push('');
+  lines.push('이 PR에서 수정한 파일이 다른 열린 PR과 겹칩니다. 머지 전 확인이 필요합니다.');
+  lines.push('');
+  lines.push('### 겹치는 파일');
+  for (const file of conflicts.conflictingFiles) {
+    lines.push(`- \`${file}\``);
+  }
+  lines.push('');
+  lines.push('### 관련 PR');
+  for (const pr of conflicts.conflictingPRs) {
+    lines.push(`- #${pr.number}: ${pr.title}`);
+  }
+  lines.push('');
+  lines.push('> 이 PR은 충돌 위험으로 인해 **draft**로 생성되었습니다. 관련 PR이 머지된 후 rebase하고 ready로 전환해주세요.');
+
+  const body = lines.join('\n').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+
+  try {
+    await execAsync(
+      `gh pr comment ${prNumber} --repo ${repo} --body "${body}"`,
+      { timeout: 15_000 },
+    );
+  } catch {
+    console.log('  WARN: 충돌 경고 코멘트 추가 실패 (PR은 정상 생성됨)');
+  }
 }
 
 /**
@@ -218,7 +263,9 @@ export async function createPullRequest(
     console.log(`  Pushing ${fixResult.branchName}...`);
     await pushBranch(fixResult.branchName, cwd);
 
-    // 4. PR 생성
+    // 4. PR 생성 (파일 충돌 감지 시 draft로 생성)
+    const hasFileConflicts = fixResult.fileConflicts != null
+      && fixResult.fileConflicts.conflictingFiles.length > 0;
     const title = buildPrTitle(fixResult);
     const body = buildPrBody(fixResult);
     const reviewers = policy.required_reviewers.length > 0
@@ -226,7 +273,12 @@ export async function createPullRequest(
       : policyConfig.default_reviewers;
     const labels = [`${fixResult.priority}`, fixResult.category, 'auto-fix'];
 
-    console.log(`  Creating PR: ${title}`);
+    if (hasFileConflicts) {
+      console.log(`  Creating DRAFT PR (파일 충돌 감지됨): ${title}`);
+    } else {
+      console.log(`  Creating PR: ${title}`);
+    }
+
     const pr = await createGhPr(
       fixResult.repo,
       title,
@@ -235,13 +287,23 @@ export async function createPullRequest(
       reviewers,
       labels,
       cwd,
+      hasFileConflicts,
     );
 
     updated.prUrl = pr.url;
     updated.prNumber = pr.number;
     updated.status = 'pr_created';
 
-    console.log(`  PR created: ${pr.url}`);
+    // 5. 파일 충돌 경고 코멘트 추가
+    if (hasFileConflicts && fixResult.fileConflicts) {
+      await addConflictWarningComment(
+        fixResult.repo,
+        pr.number,
+        fixResult.fileConflicts,
+      );
+    }
+
+    console.log(`  PR created: ${pr.url}${hasFileConflicts ? ' (draft)' : ''}`);
 
     return updated;
   } catch (error) {

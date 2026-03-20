@@ -9,6 +9,8 @@ import type {
   FixResult,
   ModifiedFile,
   VerificationResult,
+  ConflictCheckResult,
+  FileConflictInfo,
   ApprovalPolicyConfig,
   PriorityPolicy,
 } from './types/index.js';
@@ -128,6 +130,140 @@ export async function preflightCheck(project: ResolvedProject): Promise<Prefligh
   }
 
   return { ok: errors.length === 0, errors };
+}
+
+/** 사람 작업 중 쿨다운 기본값 (시간) */
+const HUMAN_ACTIVITY_COOLDOWN_HOURS = 1;
+
+/**
+ * 대상 프로젝트의 Git 작업 상태를 확인하여 사람이 작업 중인지 검증합니다.
+ *
+ * 검증 항목:
+ * 1. 현재 브랜치가 main인가 (아니면 사람이 작업 중으로 추정)
+ * 2. uncommitted 변경사항이 있는가
+ * 3. 최근 N시간 내 사람 커밋이 있는가
+ *
+ * @see AGENT_CONFLICT_PREVENTION_GUIDE.md §2.2
+ */
+export async function checkConflictSafety(
+  projectPath: string,
+  mainBranch: string,
+): Promise<ConflictCheckResult> {
+  try {
+    // 1. 현재 브랜치 확인
+    const { stdout: branchRaw } = await execAsync(
+      `git -C "${projectPath}" branch --show-current`,
+      { timeout: 10_000 },
+    );
+    const activeBranch = branchRaw.trim();
+
+    if (activeBranch && activeBranch !== mainBranch) {
+      return {
+        safe: false,
+        reason: `현재 브랜치가 ${activeBranch} (사람 작업 중 추정)`,
+        action: 'skip',
+        activeBranch,
+      };
+    }
+
+    // 2. uncommitted 변경사항 확인
+    const { stdout: statusRaw } = await execAsync(
+      `git -C "${projectPath}" status --porcelain`,
+      { timeout: 10_000 },
+    );
+
+    if (statusRaw.trim()) {
+      return {
+        safe: false,
+        reason: 'uncommitted 변경사항 존재 (사람 편집 중 추정)',
+        action: 'skip',
+        activeBranch,
+      };
+    }
+
+    // 3. 최근 N시간 내 사람 커밋 확인 (Agent 커밋 제외)
+    const sinceHours = HUMAN_ACTIVITY_COOLDOWN_HOURS;
+    const { stdout: recentRaw } = await execAsync(
+      `git -C "${projectPath}" log --since="${sinceHours} hours ago" --oneline --no-merges --invert-grep --grep="Auto-Tobe-Agent"`,
+      { timeout: 10_000 },
+    );
+
+    const recentLines = recentRaw.trim().split('\n').filter(Boolean);
+    if (recentLines.length > 0) {
+      return {
+        safe: false,
+        reason: `최근 ${sinceHours}시간 내 사람 커밋 ${recentLines.length}건 감지`,
+        action: 'defer',
+        activeBranch,
+        recentCommitCount: recentLines.length,
+      };
+    }
+
+    return { safe: true, action: 'proceed', activeBranch };
+  } catch {
+    // Git 명령 실패 시 안전하게 진행 (경로 문제 등은 이후 단계에서 처리)
+    return { safe: true, action: 'proceed' };
+  }
+}
+
+/**
+ * 수정된 파일이 현재 열린 PR의 변경 파일과 겹치는지 감지합니다.
+ *
+ * 겹치는 파일이 있으면 PR을 draft로 생성하고 경고 코멘트를 추가하기 위한
+ * 정보를 반환합니다. 충돌 감지 실패 시(API 오류 등) null을 반환하여
+ * 정상 흐름을 방해하지 않습니다.
+ *
+ * @see AGENT_CONFLICT_PREVENTION_GUIDE.md §2.3
+ */
+export async function detectFileConflicts(
+  repo: string,
+  modifiedFiles: ModifiedFile[],
+): Promise<FileConflictInfo | null> {
+  if (modifiedFiles.length === 0) return null;
+
+  try {
+    const { stdout } = await execAsync(
+      `gh pr list --repo ${repo} --state open --json number,title,files`,
+      { timeout: 30_000 },
+    );
+
+    const prs = JSON.parse(stdout) as Array<{
+      number: number;
+      title: string;
+      files: Array<{ path: string }>;
+    }>;
+
+    if (prs.length === 0) return null;
+
+    const modifiedPaths = new Set(modifiedFiles.map((f) => f.path));
+    const conflictingFiles: string[] = [];
+    const conflictingPRs: Array<{ number: number; title: string }> = [];
+
+    for (const pr of prs) {
+      if (!pr.files) continue;
+      const overlap = pr.files
+        .map((f) => f.path)
+        .filter((p) => modifiedPaths.has(p));
+
+      if (overlap.length > 0) {
+        conflictingFiles.push(...overlap);
+        conflictingPRs.push({ number: pr.number, title: pr.title });
+      }
+    }
+
+    if (conflictingFiles.length === 0) return null;
+
+    const unique = [...new Set(conflictingFiles)];
+    console.log(`  WARN: 파일 충돌 감지 — ${unique.length}개 파일이 열린 PR과 겹침`);
+    for (const pr of conflictingPRs) {
+      console.log(`    ↔ PR #${pr.number}: ${pr.title}`);
+    }
+
+    return { conflictingFiles: unique, conflictingPRs };
+  } catch {
+    // gh CLI 실패 시 충돌 감지를 건너뜀 (정상 흐름 유지)
+    return null;
+  }
 }
 
 /**
@@ -543,7 +679,17 @@ export async function orchestrateFix(
     return result;
   }
 
-  // 2. 브랜치 생성
+  // 2. 충돌 안전성 검증 (사람 작업 중 감지)
+  const conflictCheck = await checkConflictSafety(cwd, mainBranch);
+  if (!conflictCheck.safe) {
+    console.log(`  SKIP: ${conflictCheck.reason}`);
+    result.status = 'skipped';
+    result.error = `Conflict safety: ${conflictCheck.reason}`;
+    result.completedAt = new Date().toISOString();
+    return result;
+  }
+
+  // 3. 브랜치 생성
   const branchName = `${policyConfig.global_rules.branch_prefix}/${issue.number}-${toBranchSlug(issue.title)}`;
   result.branchName = branchName;
   result.status = 'in_progress';
@@ -591,6 +737,12 @@ export async function orchestrateFix(
       console.log(`  Modified files: ${modifiedFiles.length}`);
       for (const f of modifiedFiles) {
         console.log(`    ${f.changeType} ${f.path} (+${f.linesAdded}/-${f.linesDeleted})`);
+      }
+
+      // 4.1 파일 수준 충돌 감지 (열린 PR과 겹치는 파일 확인)
+      const fileConflicts = await detectFileConflicts(issue.repo, modifiedFiles);
+      if (fileConflicts) {
+        result.fileConflicts = fileConflicts;
       }
 
       // 5. 빌드 검증

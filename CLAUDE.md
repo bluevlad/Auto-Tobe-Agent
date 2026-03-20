@@ -89,13 +89,19 @@ npm run dev          # 개발 모드 (watch)
 |----------|------|------|
 | Autonomous-QA-Agent | QA Inspector (이슈 발견) | C:/GIT/Autonomous-QA-Agent |
 | Claude-Opus-bluevlad | 표준/규칙 Hub | C:/GIT/Claude-Opus-bluevlad |
-| hopenvision | 첫 대상 프로젝트 | C:/GIT/hopenvision |
+| hopenvision | 대상 프로젝트 | C:/GIT/hopenvision |
+| AllergyInsight | 대상 프로젝트 | C:/GIT/AllergyInsight |
+| EduFit | 대상 프로젝트 | C:/GIT/EduFit |
+| NewsLetterPlatform | 대상 프로젝트 | C:/GIT/NewsLetterPlatform |
+| unmong-main | 대상 프로젝트 | C:/GIT/unmong-main |
+| StandUp | 대상 프로젝트 | C:/GIT/StandUp |
 
 ## 참조 표준
 
 - Commit: C:/GIT/Claude-Opus-bluevlad/standards/git/COMMIT_CONVENTION.md
 - Branch: C:/GIT/Claude-Opus-bluevlad/standards/git/BRANCH_CONVENTION.md
 - Issue Fix: C:/GIT/Claude-Opus-bluevlad/standards/claude-code/ISSUE_FIX_WORKFLOW.md
+- Agent 충돌 방지: C:/GIT/Claude-Opus-bluevlad/standards/claude-code/AGENT_CONFLICT_PREVENTION_GUIDE.md
 
 ## Fix 커밋 오류 추적
 

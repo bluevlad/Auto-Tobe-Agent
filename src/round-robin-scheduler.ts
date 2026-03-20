@@ -21,7 +21,7 @@ import type {
   ScheduleAdjustment,
 } from './types/index.js';
 import { resolveProject } from './project-resolver.js';
-import { orchestrateFix } from './fix-orchestrator.js';
+import { orchestrateFix, checkConflictSafety } from './fix-orchestrator.js';
 import { createPullRequest } from './pr-creator.js';
 import {
   loadHistory,
@@ -176,6 +176,16 @@ export async function executeRoundRobinBatch(
 
     if (!project.localPathExists) {
       console.log(`  [${name}] SKIP: 로컬 경로 없음`);
+      continue;
+    }
+
+    // 충돌 안전성 검증: 사람이 작업 중이면 이 프로젝트 전체를 이번 배치에서 제외
+    const conflictCheck = await checkConflictSafety(
+      project.config.local_path,
+      project.config.main_branch,
+    );
+    if (!conflictCheck.safe) {
+      console.log(`  [${name}] SKIP (충돌 방지): ${conflictCheck.reason}`);
       continue;
     }
 
