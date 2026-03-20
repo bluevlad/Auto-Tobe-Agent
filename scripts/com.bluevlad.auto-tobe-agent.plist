@@ -2,11 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <!--
-  Auto-Tobe-Agent launchd 배치 설정
-  QA Agent(22:00 이슈 등록) 기준으로 하루 3회 실행합니다.
-    - 09:00 메인 수정 (뉴스레터 발송 완료 후, QA 이슈 처리)
-    - 12:00 보충 수정 (오전 수동 등록 이슈 + 재시도)
-    - 23:30 즉시 대응 (QA 직후 P0/P1 긴급 수정)
+  Auto-Tobe-Agent launchd 배치 설정 (Tier 2: Fix 배치)
+  사람 비활성 시간(새벽)에 실행하여 Agent-Human 충돌을 방지합니다.
+    - 01:00 메인 수정 (QA Agent 전날 22시 점검 결과 처리)
+    - 05:00 보충 수정 (재시도 + 잔여 이슈 처리)
 
   설치:
     1. 이 파일의 경로를 운영 환경에 맞게 수정하세요 (AGENT_HOME, HOME 등)
@@ -14,6 +13,7 @@
     3. launchctl load ~/Library/LaunchAgents/com.bluevlad.auto-tobe-agent.plist
 
   주의: 경로에 실제 사용자명/서버 정보를 포함하지 않도록 local.json에서 오버라이드하세요.
+  참조: AGENT_CONFLICT_PREVENTION_GUIDE.md §2.1 (시간대 분리 전략)
 -->
 <dict>
     <key>Label</key>
@@ -29,21 +29,15 @@
     <array>
         <dict>
             <key>Hour</key>
-            <integer>9</integer>
+            <integer>1</integer>
             <key>Minute</key>
             <integer>0</integer>
         </dict>
         <dict>
             <key>Hour</key>
-            <integer>12</integer>
+            <integer>5</integer>
             <key>Minute</key>
             <integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key>
-            <integer>23</integer>
-            <key>Minute</key>
-            <integer>30</integer>
         </dict>
     </array>
 

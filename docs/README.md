@@ -1,17 +1,19 @@
 # Auto-Tobe-Agent 문서
 
-상세 문서는 [Claude-Opus-bluevlad](https://github.com/bluevlad/Claude-Opus-bluevlad) Private 저장소에서 관리됩니다.
+## 프로젝트 내 문서
 
-## 문서 목록
+| 문서 | 설명 |
+|------|------|
+| [EXECUTION_GUIDE.md](EXECUTION_GUIDE.md) | macOS launchd 실행 구조, CLI 명령어, 로그 구조 |
+| [CLAUDE.md](../CLAUDE.md) | 프로젝트 설정, 아키텍처, 설계 원칙 |
+| [README.md](../README.md) | 프로젝트 개요, 설치/실행 방법 |
 
-| 문서 | 위치 | 설명 |
-|------|------|------|
-| ARCHITECTURE.md | Claude-Opus-bluevlad/docs/Auto-Tobe-Agent/ | 시스템 아키텍처 |
-| PHASE_PLAN.md | Claude-Opus-bluevlad/docs/Auto-Tobe-Agent/ | 개발 로드맵 |
-| BATCH_DEPLOYMENT.md | Claude-Opus-bluevlad/docs/Auto-Tobe-Agent/ | 배치 배포 가이드 |
-| DOCKER_OPS_GUIDE.md | Claude-Opus-bluevlad/docs/Auto-Tobe-Agent/ | Docker 운영 가이드 |
+## 참조 표준 (Claude-Opus-bluevlad)
 
-## 참조
-
-- 코드 관련 기본 정보: [CLAUDE.md](../CLAUDE.md)
-- 실행 방법: [README.md](../README.md)
+| 문서 | 설명 |
+|------|------|
+| [AGENT_CONFLICT_PREVENTION_GUIDE.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/claude-code/AGENT_CONFLICT_PREVENTION_GUIDE.md) | Agent-Human 충돌 방지 3단계 전략 |
+| [ISSUE_FIX_WORKFLOW.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/claude-code/ISSUE_FIX_WORKFLOW.md) | 이슈 수정 워크플로우 표준 |
+| [GIT_FIRST_WORKFLOW.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/claude-code/GIT_FIRST_WORKFLOW.md) | Git-First 워크플로우 |
+| [COMMIT_CONVENTION.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/git/COMMIT_CONVENTION.md) | 커밋 메시지 규칙 |
+| [FIX_COMMIT_TRACKING_GUIDE.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/git/FIX_COMMIT_TRACKING_GUIDE.md) | fix 커밋 오류 추적 가이드 |
