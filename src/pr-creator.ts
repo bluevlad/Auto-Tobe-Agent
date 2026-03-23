@@ -103,6 +103,25 @@ function buildPrBody(fixResult: FixResult): string {
   lines.push(formatVerifications(fixResult));
   lines.push('');
 
+  // PR-first: 로컬 빌드 실패 시 CI 검증 안내
+  if (fixResult.status === 'build_failed_ci_pending') {
+    lines.push('## :warning: CI Verification Required');
+    lines.push('');
+    lines.push('로컬 빌드가 실패하여 **PR-first 전략**으로 PR을 생성했습니다.');
+    lines.push('GitHub Actions CI에서 빌드/테스트 결과를 확인해주세요.');
+    lines.push('');
+    const failedBuild = fixResult.verifications.find((v) => v.type === 'build' && !v.passed);
+    if (failedBuild?.error) {
+      lines.push('<details><summary>로컬 빌드 에러</summary>');
+      lines.push('');
+      lines.push('```');
+      lines.push(failedBuild.error.substring(0, 2000));
+      lines.push('```');
+      lines.push('</details>');
+      lines.push('');
+    }
+  }
+
   lines.push('## Test Plan');
   lines.push('');
   lines.push('- [ ] 코드 리뷰 완료');
@@ -240,12 +259,14 @@ export async function createPullRequest(
     return updated;
   }
 
-  // fix가 성공적이었는지 확인 (build_verified 또는 test_verified)
-  const validStatuses = ['build_verified', 'test_verified', 'fix_applied'];
+  // fix가 성공적이었는지 확인 (build_verified, test_verified, 또는 PR-first)
+  const validStatuses = ['build_verified', 'test_verified', 'fix_applied', 'build_failed_ci_pending'];
   if (!validStatuses.includes(fixResult.status)) {
     console.log(`  SKIP: 유효하지 않은 상태 (${fixResult.status})`);
     return updated;
   }
+
+  const isCiPending = fixResult.status === 'build_failed_ci_pending';
 
   try {
     // 2. 프로젝트 로컬 경로에서 작업
@@ -272,6 +293,9 @@ export async function createPullRequest(
       ? policy.required_reviewers
       : policyConfig.default_reviewers;
     const labels = [`${fixResult.priority}`, fixResult.category, 'auto-fix'];
+    if (isCiPending) {
+      labels.push('needs-ci-verification');
+    }
 
     if (hasFileConflicts) {
       console.log(`  Creating DRAFT PR (파일 충돌 감지됨): ${title}`);

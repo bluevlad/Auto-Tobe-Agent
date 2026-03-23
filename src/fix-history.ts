@@ -18,6 +18,8 @@ export interface FixHistoryEntry {
   error?: string;
   processedAt: string;
   durationMs?: number;
+  /** 중복 이슈 필터링용 정규화된 키 (제목에서 변동 부분 제거) */
+  deduplicationKey?: string;
 }
 
 /** 프로젝트별 처리 이력 */
@@ -77,7 +79,7 @@ export function isAlreadyProcessed(
 
   if (!entry) return false;
 
-  const successStatuses = ['pr_created', 'merged', 'deployed', 'test_verified', 'build_verified'];
+  const successStatuses = ['pr_created', 'merged', 'deployed', 'test_verified', 'build_verified', 'build_failed_ci_pending'];
   return successStatuses.includes(entry.status);
 }
 
@@ -100,6 +102,7 @@ export function recordResult(
     error: result.error,
     processedAt: new Date().toISOString(),
     durationMs: result.durationMs,
+    deduplicationKey: result.deduplicationKey,
   };
   history.lastRunAt = new Date().toISOString();
 
@@ -149,6 +152,34 @@ export function resetAllFailed(
 }
 
 /**
+ * 정규화된 키로 이미 처리된 이슈가 있는지 확인합니다 (중복 이슈 필터링).
+ *
+ * QA Agent가 동일 테스트 실패를 매번 새 이슈(다른 번호)로 생성할 때,
+ * 제목 기반 partial match로 이미 처리된 동일 문제인지 판별합니다.
+ */
+export function isDuplicateByKey(
+  history: FixHistoryFile,
+  project: string,
+  deduplicationKey: string,
+): { isDuplicate: boolean; existingIssueNumber?: number } {
+  if (!deduplicationKey) return { isDuplicate: false };
+
+  const successStatuses = ['pr_created', 'merged', 'deployed', 'test_verified', 'build_verified', 'build_failed_ci_pending'];
+
+  for (const [key, entry] of Object.entries(history.entries)) {
+    if (!key.startsWith(`${project}#`)) continue;
+    if (!successStatuses.includes(entry.status)) continue;
+
+    // deduplicationKey를 이력의 deduplicationKey와 비교
+    if (entry.deduplicationKey && entry.deduplicationKey === deduplicationKey) {
+      return { isDuplicate: true, existingIssueNumber: entry.issueNumber };
+    }
+  }
+
+  return { isDuplicate: false };
+}
+
+/**
  * 프로젝트의 처리 이력 통계를 반환합니다.
  */
 export function getProjectStats(
@@ -159,7 +190,7 @@ export function getProjectStats(
     (e) => e.project === project,
   );
 
-  const successStatuses = ['pr_created', 'merged', 'deployed', 'test_verified', 'build_verified'];
+  const successStatuses = ['pr_created', 'merged', 'deployed', 'test_verified', 'build_verified', 'build_failed_ci_pending'];
 
   return {
     total: entries.length,

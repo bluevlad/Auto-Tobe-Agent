@@ -7,6 +7,7 @@ export type FixStatus =
   | 'fix_applied'
   | 'build_verified'
   | 'test_verified'
+  | 'build_failed_ci_pending'
   | 'pr_created'
   | 'verification_requested'
   | 'verification_passed'
@@ -64,6 +65,8 @@ export interface FixResult {
   fileConflicts?: FileConflictInfo;
   /** QA Agent Run ID — 점검→수정→확인 lifecycle 추적용 */
   sourceRunId?: string;
+  /** 중복 이슈 필터링용 정규화된 키 */
+  deduplicationKey?: string;
 }
 
 /** Pre-flight 충돌 검증 결과 */

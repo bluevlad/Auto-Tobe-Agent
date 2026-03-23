@@ -19,8 +19,42 @@ function expandEnvVars(value: string): string {
 }
 
 /**
+ * projects.local.json의 오버라이드를 base config에 deep merge합니다.
+ * local_path, commands 등 환경별 설정을 머신별로 오버라이드할 수 있습니다.
+ */
+function mergeLocalOverrides(
+  base: ProjectsConfig,
+  overrides: Record<string, Record<string, unknown>>,
+): ProjectsConfig {
+  const merged = { ...base, projects: { ...base.projects } };
+
+  for (const [projectName, overrideFields] of Object.entries(overrides)) {
+    if (!merged.projects[projectName]) continue;
+
+    const project = { ...merged.projects[projectName] };
+
+    for (const [field, value] of Object.entries(overrideFields)) {
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        // 1-depth shallow merge for nested objects (commands, urls, etc.)
+        (project as Record<string, unknown>)[field] = {
+          ...((project as Record<string, unknown>)[field] as Record<string, unknown> ?? {}),
+          ...(value as Record<string, unknown>),
+        };
+      } else {
+        (project as Record<string, unknown>)[field] = value;
+      }
+    }
+
+    merged.projects[projectName] = project;
+  }
+
+  return merged;
+}
+
+/**
  * configs/projects.json을 로드합니다 (캐시 활용).
  * local_path 등의 환경변수 참조(${HOME})를 실제 값으로 치환합니다.
+ * configs/projects.local.json이 있으면 오버라이드를 적용합니다.
  */
 function loadProjectsConfig(): ProjectsConfig {
   if (cachedConfig) return cachedConfig;
@@ -28,7 +62,27 @@ function loadProjectsConfig(): ProjectsConfig {
   const configPath = resolve(__dirname, '..', 'configs', 'projects.json');
   const raw = readFileSync(configPath, 'utf-8');
   const expanded = expandEnvVars(raw);
-  cachedConfig = JSON.parse(expanded) as ProjectsConfig;
+  let config = JSON.parse(expanded) as ProjectsConfig;
+
+  // projects.local.json 오버라이드 적용
+  const localPath = resolve(__dirname, '..', 'configs', 'projects.local.json');
+  if (existsSync(localPath)) {
+    try {
+      const localRaw = readFileSync(localPath, 'utf-8');
+      const localExpanded = expandEnvVars(localRaw);
+      const localJson = JSON.parse(localExpanded) as Record<string, unknown>;
+      // projects wrapper 구조 지원: { "projects": { ... } } 또는 직접 { "hopenvision": { ... } }
+      const localOverrides = (localJson.projects ?? localJson) as Record<string, Record<string, unknown>>;
+      // _comment 등 메타 필드 제거
+      delete localOverrides['_comment'];
+      config = mergeLocalOverrides(config, localOverrides);
+      console.log(`  [config] projects.local.json 오버라이드 적용됨`);
+    } catch (err) {
+      console.warn(`  [config] projects.local.json 파싱 실패: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  cachedConfig = config;
   return cachedConfig;
 }
 

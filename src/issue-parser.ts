@@ -323,3 +323,28 @@ export function sortByPriority(issues: ParsedIssue[]): ParsedIssue[] {
   const order: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
   return [...issues].sort((a, b) => order[a.priority] - order[b.priority]);
 }
+
+/**
+ * 이슈 제목에서 중복 판별용 정규화된 키를 추출합니다.
+ *
+ * QA Agent가 생성하는 이슈 제목에는 실패 횟수, 날짜 등이 포함되어
+ * 동일 테스트 실패가 매번 새 이슈로 인식되는 문제가 있습니다.
+ * 이 함수는 변동 부분을 제거하여 동일 테스트를 식별합니다.
+ *
+ * 예시:
+ *   "[P2][Frontend] 정답 입력 페이지 렌더링 실패 (3회 연속)" → "정답 입력 페이지 렌더링 실패"
+ *   "[P3][CodeQuality] exam-list 테이블 셀렉터 오류 (2026-03-17)" → "exam-list 테이블 셀렉터 오류"
+ */
+export function extractDeduplicationKey(title: string): string {
+  return title
+    // [P0][Category] 접두사 제거
+    .replace(/^\[P\d\](?:\[\w+\])?\s*/, '')
+    // 괄호 안 실패 횟수 제거: (3회 연속), (N회), (연속 N회 실패)
+    .replace(/\s*\((?:\d+회[\s\w]*|연속\s*\d+회[\s\w]*)\)\s*/g, '')
+    // 괄호 안 날짜 제거: (2026-03-17), (03/17)
+    .replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*/g, '')
+    .replace(/\s*\(\d{2}\/\d{2}\)\s*/g, '')
+    // 끝 공백 및 #번호 제거
+    .replace(/\s*#\d+\s*$/, '')
+    .trim();
+}

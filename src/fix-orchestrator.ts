@@ -14,6 +14,7 @@ import type {
   ApprovalPolicyConfig,
   PriorityPolicy,
 } from './types/index.js';
+import { extractDeduplicationKey } from './issue-parser.js';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -729,10 +730,14 @@ export async function orchestrateFix(
     return result;
   }
 
+  // 2.5 중복 이슈 키 생성
+  const deduplicationKey = extractDeduplicationKey(issue.title);
+
   // 3. 브랜치 생성
   const branchName = `${policyConfig.global_rules.branch_prefix}/${issue.number}-${toBranchSlug(issue.title)}`;
   result.branchName = branchName;
   result.status = 'in_progress';
+  result.deduplicationKey = deduplicationKey;
 
   console.log(`  Branch: ${branchName}`);
 
@@ -785,21 +790,49 @@ export async function orchestrateFix(
         result.fileConflicts = fileConflicts;
       }
 
-      // 5. 빌드 검증
+      // 5. 빌드 검증 (Frontend-only 변경 시 프론트엔드 빌드만 실행)
+      const isFrontendOnly = modifiedFiles.every(
+        (f) => f.path.startsWith(project.config.project_structure.frontend_root ?? 'web-admin/')
+          || f.path.endsWith('.css') || f.path.endsWith('.scss'),
+      );
+
       if (policyConfig.global_rules.require_clean_build) {
-        const buildCwd = project.config.commands.build_backend_cwd
-          ? resolve(cwd, project.config.commands.build_backend_cwd)
-          : cwd;
-        console.log(`  Running build: ${project.config.commands.build_backend} (cwd: ${buildCwd})`);
-        const buildResult = await runVerification(
-          'build',
-          project.config.commands.build_backend,
-          buildCwd,
-        );
+        let buildCmd: string;
+        let buildCwd: string;
+
+        if (isFrontendOnly && project.config.commands.build_frontend) {
+          // Frontend-only 변경: npm build만 실행 (gradlew 스킵)
+          buildCmd = project.config.commands.build_frontend;
+          buildCwd = project.config.commands.build_frontend_cwd
+            ? resolve(cwd, project.config.commands.build_frontend_cwd)
+            : cwd;
+          console.log(`  Frontend-only change detected. Running: ${buildCmd} (cwd: ${buildCwd})`);
+        } else {
+          buildCmd = project.config.commands.build_backend;
+          buildCwd = project.config.commands.build_backend_cwd
+            ? resolve(cwd, project.config.commands.build_backend_cwd)
+            : cwd;
+          console.log(`  Running build: ${buildCmd} (cwd: ${buildCwd})`);
+        }
+
+        const buildResult = await runVerification('build', buildCmd, buildCwd);
         result.verifications.push(buildResult);
 
         if (!buildResult.passed) {
           console.log(`  BUILD FAILED (${buildResult.durationMs}ms)`);
+
+          // PR-first 전략: 빌드 실패해도 수정 파일이 있으면 PR 생성 (CI에 위임)
+          if (modifiedFiles.length > 0 && policy.auto_pr) {
+            console.log('  PR-first: 빌드 실패하지만 PR 생성 후 CI에 검증 위임');
+            const commitHash = await commitChanges(issue.number, issue.title, cwd);
+            result.commitHash = commitHash;
+            result.status = 'build_failed_ci_pending';
+            result.error = `Build failed locally — CI verification required: ${buildResult.error?.substring(0, 200)}`;
+            result.completedAt = new Date().toISOString();
+            result.durationMs = Date.now() - new Date(result.startedAt).getTime();
+            return result;
+          }
+
           result.status = 'failed';
           result.error = `Build failed: ${buildResult.error?.substring(0, 200)}`;
           continue; // 재시도
