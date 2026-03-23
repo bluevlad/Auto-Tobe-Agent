@@ -5,6 +5,7 @@
 | 문서 | 설명 |
 |------|------|
 | [EXECUTION_GUIDE.md](EXECUTION_GUIDE.md) | macOS launchd 실행 구조, CLI 명령어, 로그 구조 |
+| [PR_FIRST_STRATEGY_GUIDE.md](PR_FIRST_STRATEGY_GUIDE.md) | PR-first 전략, 중복 이슈 필터링, projects.local.json 가이드 |
 | [CLAUDE.md](../CLAUDE.md) | 프로젝트 설정, 아키텍처, 설계 원칙 |
 | [README.md](../README.md) | 프로젝트 개요, 설치/실행 방법 |
 
