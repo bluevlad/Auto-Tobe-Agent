@@ -240,8 +240,26 @@ function determineAutoFixable(
   priority: Priority,
   category: IssueCategory,
   meta?: QaAgentMeta,
+  title?: string,
+  labels?: string[],
 ): boolean {
+  // QA-AGENT-META가 있으면 그 판단을 존중
   if (meta?.auto_fixable !== undefined) return meta.auto_fixable;
+
+  // improvement 라벨이 있고 QA-AGENT-META가 없는 이슈는 자동 수정 불가
+  // (패턴 분석 기반 개선 제안이므로 구체적 수정 정보가 없음)
+  const isImprovement = labels?.includes('improvement') ||
+    (title?.startsWith('[QA-Improvement]') ?? false);
+  if (isImprovement && !meta) return false;
+
+  // 10회 이상 연속 실패 이슈는 환경 문제로 추정 → 자동 수정 불가
+  // (코드 수정으로 해결되지 않는 인프라/환경 이슈일 가능성 높음)
+  if (title) {
+    const consecutiveMatch = title.match(/(\d+)회\s*연속\s*실패/);
+    if (consecutiveMatch && parseInt(consecutiveMatch[1], 10) >= 10) {
+      return false;
+    }
+  }
 
   // P0 보안 이슈 중 Git 이력 관련은 자동 수정 불가
   if (priority === 'P0' && category === 'security') return false;
@@ -280,7 +298,8 @@ export async function parseIssue(
       parsedContent,
       sourceRunId,
       createdAt: issue.createdAt,
-      isAutoFixable: determineAutoFixable(priority, category, meta),
+      isAutoFixable: determineAutoFixable(priority, category, meta, issue.title, labels),
+      deduplicationKey: extractDeduplicationKey(issue.title),
     };
   } catch (error) {
     return {
@@ -337,14 +356,28 @@ export function sortByPriority(issues: ParsedIssue[]): ParsedIssue[] {
  */
 export function extractDeduplicationKey(title: string): string {
   return title
+    // [QA-Improvement] prefix 제거
+    .replace(/^\[QA-Improvement\]\s*/, '')
+    // [QA-Auto] prefix 제거
+    .replace(/^\[QA-Auto\]\s*/, '')
     // [P0][Category] 접두사 제거
     .replace(/^\[P\d\](?:\[\w+\])?\s*/, '')
+    // "projectName - " 접두사 제거
+    .replace(/^\w[\w-]*\s*-\s*/, '')
     // 괄호 안 실패 횟수 제거: (3회 연속), (N회), (연속 N회 실패)
     .replace(/\s*\((?:\d+회[\s\w]*|연속\s*\d+회[\s\w]*)\)\s*/g, '')
+    // 끝에 붙는 "N회 연속 실패" 패턴 제거
+    .replace(/\s*\d+회\s*연속\s*실패\s*$/, '')
     // 괄호 안 날짜 제거: (2026-03-17), (03/17)
     .replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*/g, '')
     .replace(/\s*\(\d{2}\/\d{2}\)\s*/g, '')
+    // 테스트 실패 N건 (P1) 패턴 제거
+    .replace(/\s*테스트 실패\s*\d+건\s*\(P\d\)\s*$/, '')
+    // 서비스 미응답 (P0) 패턴 제거
+    .replace(/\s*서비스 미응답\s*\(P\d\)\s*$/, '')
     // 끝 공백 및 #번호 제거
     .replace(/\s*#\d+\s*$/, '')
+    // 따옴표 제거 (improvement 이슈에서 테스트명이 따옴표로 감싸짐)
+    .replace(/^"(.*)"$/, '$1')
     .trim();
 }

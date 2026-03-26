@@ -25,6 +25,9 @@ export type FixStrategy = 'claude-code-cli' | 'template-based';
  * -->
  * ```
  */
+/** 수정 대상 분류 */
+export type FixCategory = 'service-code' | 'test-code' | 'unknown';
+
 export interface QaAgentMeta {
   project: string;
   repo: string;
@@ -37,6 +40,8 @@ export interface QaAgentMeta {
   verification?: string;
   /** QA Agent 실행 Run ID (점검→수정→확인 추적용) */
   runId?: string;
+  /** 수정 대상 분류: service-code(백엔드), test-code(테스트), unknown */
+  fix_category?: FixCategory;
 }
 
 /**
@@ -74,6 +79,8 @@ export interface ParsedIssue {
   createdAt: string;
   /** 수정 가능 여부 판단 */
   isAutoFixable: boolean;
+  /** 중복 이슈 필터링용 정규화된 키 (제목에서 변동 부분 제거) */
+  deduplicationKey?: string;
 }
 
 /** 이슈 파싱 실패 결과 */

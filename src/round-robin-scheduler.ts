@@ -27,6 +27,7 @@ import {
   loadHistory,
   saveHistory,
   isAlreadyProcessed,
+  isDuplicateByKey,
   recordResult,
 } from './fix-history.js';
 import { fetchOpenIssueNumbers, parseIssue, isParsedIssue, sortByPriority } from './issue-parser.js';
@@ -198,6 +199,14 @@ export async function executeRoundRobinBatch(
       }
       const result = await parseIssue(item.number, project.config.repo);
       if (isParsedIssue(result) && result.isAutoFixable) {
+        // 정규화된 키로 중복 이슈 필터링
+        if (result.deduplicationKey) {
+          const dup = isDuplicateByKey(history, name, result.deduplicationKey);
+          if (dup.isDuplicate) {
+            console.log(`  [${name}] #${item.number}: duplicate of #${dup.existingIssueNumber}, skipping`);
+            continue;
+          }
+        }
         parsed.push(result);
       }
     }

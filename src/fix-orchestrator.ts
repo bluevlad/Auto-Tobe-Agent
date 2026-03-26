@@ -377,6 +377,27 @@ function buildFixPrompt(issue: ParsedIssue, project: ResolvedProject): string {
     }
   }
 
+  // fix_category 기반 수정 방향 안내
+  const fixCategory = issue.meta?.fix_category;
+  if (fixCategory === 'test-code') {
+    lines.push('## 수정 방향: 테스트 코드 업데이트');
+    lines.push('- 이 이슈는 **테스트 코드** 쪽 문제로 분류되었습니다 (셀렉터/단언문 불일치)');
+    lines.push('- 서비스 코드가 아닌 **테스트 파일**을 수정하세요');
+    lines.push('- 현재 UI/API 응답에 맞게 테스트 셀렉터, expected 값, 페이지 경로 등을 업데이트하세요');
+    if (issue.meta?.fix_hint) {
+      lines.push(`- 힌트: ${issue.meta.fix_hint}`);
+    }
+    lines.push('');
+  } else if (fixCategory === 'service-code') {
+    lines.push('## 수정 방향: 서비스 코드 수정');
+    lines.push('- 이 이슈는 **서버 측 코드** 문제로 분류되었습니다 (API 오류, 서버 에러)');
+    lines.push('- 백엔드 API 핸들러, 서비스 로직, DB 쿼리 등을 점검하세요');
+    if (issue.meta?.fix_hint) {
+      lines.push(`- 힌트: ${issue.meta.fix_hint}`);
+    }
+    lines.push('');
+  }
+
   lines.push('## 수정 규칙');
   lines.push('- 기존 코드 스타일을 유지하세요');
   lines.push('- 필요한 최소한의 변경만 수행하세요');

@@ -32,6 +32,7 @@ import {
   loadHistory,
   saveHistory,
   isAlreadyProcessed,
+  isDuplicateByKey,
   recordResult,
   getProjectStats,
   resetAllFailed,
@@ -455,6 +456,15 @@ async function runBatch(projectName?: string): Promise<void> {
 
       const result = await parseIssue(item.number, project.config.repo);
       if (isParsedIssue(result) && result.isAutoFixable) {
+        // 정규화된 키로 중복 이슈 필터링 (동일 테스트 실패가 다른 이슈 번호로 올라온 경우)
+        if (result.deduplicationKey) {
+          const dup = isDuplicateByKey(history, name, result.deduplicationKey);
+          if (dup.isDuplicate) {
+            console.log(`  #${item.number}: duplicate of #${dup.existingIssueNumber} (key: ${result.deduplicationKey}), skipping`);
+            totalSkipped++;
+            continue;
+          }
+        }
         parsed.push(result);
       }
     }
