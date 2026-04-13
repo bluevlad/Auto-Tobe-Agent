@@ -14,6 +14,7 @@ export type {
   Ports,
   Urls,
   ProjectStructure,
+  ProjectScope,
   ProjectConfig,
   ProjectsConfig,
   ResolvedProject,

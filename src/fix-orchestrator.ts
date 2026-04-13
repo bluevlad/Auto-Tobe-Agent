@@ -15,6 +15,7 @@ import type {
   PriorityPolicy,
 } from './types/index.js';
 import { extractDeduplicationKey } from './issue-parser.js';
+import { checkOwnership } from './ownership-filter.js';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -132,8 +133,12 @@ export async function preflightCheck(project: ResolvedProject): Promise<Prefligh
     errors.push(`프로젝트 로컬 경로가 존재하지 않습니다: ${cwd}`);
   }
 
-  // 4. Java Runtime 확인 (Gradle 프로젝트)
-  if (project.config.tech_stack.build_tool === 'gradle' || project.config.tech_stack.build_tool === 'maven') {
+  // scope: 'frontend-only'인 경우 백엔드 런타임/빌드 검증 건너뜀
+  const isFrontendOnlyScope = project.config.scope === 'frontend-only';
+
+  // 4. Java Runtime 확인 (Gradle/Maven 프로젝트, frontend-only는 스킵)
+  if (!isFrontendOnlyScope &&
+      (project.config.tech_stack.build_tool === 'gradle' || project.config.tech_stack.build_tool === 'maven')) {
     try {
       await execAsync('java --version', { timeout: 5_000 });
     } catch {
@@ -144,10 +149,13 @@ export async function preflightCheck(project: ResolvedProject): Promise<Prefligh
   // 5. 빌드 도구 존재 확인 (cwd 반영)
   if (project.localPathExists) {
     const commands = project.config.commands;
-    const checks: Array<{ cmd: string; cwdSuffix?: string }> = [
-      { cmd: commands.build_backend, cwdSuffix: commands.build_backend_cwd },
-      { cmd: commands.test_backend, cwdSuffix: commands.test_backend_cwd },
-    ];
+    const checks: Array<{ cmd: string; cwdSuffix?: string }> = [];
+    if (!isFrontendOnlyScope && commands.build_backend) {
+      checks.push({ cmd: commands.build_backend, cwdSuffix: commands.build_backend_cwd });
+    }
+    if (!isFrontendOnlyScope && commands.test_backend) {
+      checks.push({ cmd: commands.test_backend, cwdSuffix: commands.test_backend_cwd });
+    }
 
     for (const check of checks) {
       // gradlew 파일 존재 확인
@@ -716,6 +724,19 @@ export async function orchestrateFix(
   console.log(`\n[fix] #${issue.number} ${issue.title}`);
   console.log(`  Priority: ${issue.priority}, Strategy: ${policy.fix_strategy}`);
 
+  // 0. 소유권 필터 — scope=frontend-only 에이전트가 백엔드 이슈를 집는 것을 차단
+  const ownership = checkOwnership(issue, project);
+  if (ownership.action !== 'accept') {
+    console.log(`  SKIP (ownership ${ownership.action}): ${ownership.reason} [basis: ${ownership.basis}]`);
+    result.status = 'skipped';
+    result.error =
+      ownership.action === 'hold-for-review'
+        ? `Ownership hold-for-review: ${ownership.reason}`
+        : `Not owned by ${project.config.scope} agent: ${ownership.reason}`;
+    result.completedAt = new Date().toISOString();
+    return result;
+  }
+
   // 1. 자동 수정 가능 여부 확인
   if (!issue.isAutoFixable) {
     console.log('  SKIP: 자동 수정 불가 (manual fix required)');
@@ -812,14 +833,15 @@ export async function orchestrateFix(
       }
 
       // 5. 빌드 검증 (Frontend-only 변경 시 프론트엔드 빌드만 실행)
-      const isFrontendOnly = modifiedFiles.every(
+      const scopeFrontendOnly = project.config.scope === 'frontend-only';
+      const isFrontendOnly = scopeFrontendOnly || modifiedFiles.every(
         (f) => f.path.startsWith(project.config.project_structure.frontend_root ?? 'web-admin/')
           || f.path.endsWith('.css') || f.path.endsWith('.scss'),
       );
 
       if (policyConfig.global_rules.require_clean_build) {
-        let buildCmd: string;
-        let buildCwd: string;
+        let buildCmd: string | undefined;
+        let buildCwd: string = cwd;
 
         if (isFrontendOnly && project.config.commands.build_frontend) {
           // Frontend-only 변경: npm build만 실행 (gradlew 스킵)
@@ -828,14 +850,20 @@ export async function orchestrateFix(
             ? resolve(cwd, project.config.commands.build_frontend_cwd)
             : cwd;
           console.log(`  Frontend-only change detected. Running: ${buildCmd} (cwd: ${buildCwd})`);
-        } else {
+        } else if (project.config.commands.build_backend) {
           buildCmd = project.config.commands.build_backend;
           buildCwd = project.config.commands.build_backend_cwd
             ? resolve(cwd, project.config.commands.build_backend_cwd)
             : cwd;
           console.log(`  Running build: ${buildCmd} (cwd: ${buildCwd})`);
+        } else {
+          console.log('  Build skipped: no build command available for this scope');
         }
 
+        if (!buildCmd) {
+          // 빌드 명령이 없으면 검증 단계를 건너뛰고 곧바로 커밋 단계로
+          result.status = 'build_verified';
+        } else {
         const buildResult = await runVerification('build', buildCmd, buildCwd);
         result.verifications.push(buildResult);
 
@@ -861,17 +889,23 @@ export async function orchestrateFix(
 
         console.log(`  BUILD PASSED (${buildResult.durationMs}ms)`);
         result.status = 'build_verified';
+        } // end else (buildCmd exists)
       }
 
-      // 6. 테스트 검증
-      if (policyConfig.global_rules.require_existing_tests_pass) {
+      // 6. 테스트 검증 — scope=frontend-only 또는 test_backend 미정의 시 스킵
+      const backendTestCmd = project.config.commands.test_backend;
+      if (
+        policyConfig.global_rules.require_existing_tests_pass &&
+        backendTestCmd &&
+        !scopeFrontendOnly
+      ) {
         const testCwd = project.config.commands.test_backend_cwd
           ? resolve(cwd, project.config.commands.test_backend_cwd)
           : cwd;
-        console.log(`  Running tests: ${project.config.commands.test_backend} (cwd: ${testCwd})`);
+        console.log(`  Running tests: ${backendTestCmd} (cwd: ${testCwd})`);
         const testResult = await runVerification(
           'test',
-          project.config.commands.test_backend,
+          backendTestCmd,
           testCwd,
         );
         result.verifications.push(testResult);

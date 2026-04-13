@@ -217,10 +217,12 @@ async function resolveProjectCommand(projectName?: string): Promise<void> {
     console.log(`  Repo: ${project.config.repo}`);
     console.log(`  Path: ${project.config.local_path}`);
     console.log(`  Exists: ${project.localPathExists}`);
+    console.log(`  Scope: ${project.config.scope ?? 'full-stack'}`);
     console.log(`  Tech: ${project.config.tech_stack.backend} + ${project.config.tech_stack.frontend}`);
     console.log(`  DB: ${project.config.tech_stack.database}`);
-    console.log(`  Build: ${project.config.commands.build_backend}`);
-    console.log(`  Test: ${project.config.commands.test_backend}`);
+    console.log(`  Build (backend): ${project.config.commands.build_backend ?? '(none)'}`);
+    console.log(`  Build (frontend): ${project.config.commands.build_frontend ?? '(none)'}`);
+    console.log(`  Test (backend): ${project.config.commands.test_backend ?? '(none)'}`);
     if (project.config.docker?.services) {
       console.log(`  Docker services: ${Object.keys(project.config.docker.services).join(', ')}`);
     }

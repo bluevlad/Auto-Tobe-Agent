@@ -131,7 +131,33 @@
       },
       "qa_agent_project": "hopenvision",
       "enabled": true,
-      "notes": "공무원 시험 채점 시스템 - Java 17, Spring Boot 3.2.2, React 19, TypeScript 5.9, PostgreSQL 16"
+      "scope": "frontend-only",
+      "notes": "공무원 시험 채점 시스템 - Java 17, Spring Boot 3.2.2, React 19, TypeScript 5.9, PostgreSQL 16. 이 에이전트는 web-admin/ (React) 이슈만 처리 — Java 백엔드는 별도 Java 에이전트 담당."
+    },
+    "academy-admin-frontend": {
+      "repo": "bluevlad/academy-admin-front-end-React",
+      "local_path": "${HOME}/GIT/academy-admin/frontend",
+      "tech_stack": {
+        "backend": "none",
+        "frontend": "react-vite-mui",
+        "database": "none",
+        "build_tool": "vite",
+        "language": "javascript-ts-partial"
+      },
+      "main_branch": "main",
+      "commands": {
+        "build_frontend": "npm run build",
+        "test_frontend": "npm test",
+        "lint_frontend": "npm run lint"
+      },
+      "project_structure": {
+        "frontend_root": "",
+        "frontend_src": "src/"
+      },
+      "qa_agent_project": "academy-admin",
+      "enabled": true,
+      "scope": "frontend-only",
+      "notes": "Academy Admin 프론트엔드 (React 18 + Vite 6 + MUI 6). backend/ 디렉토리는 별도 Java 에이전트가 담당. repo는 프론트엔드 전용 저장소(academy-admin-front-end-React)로 직결 등록."
     }
   }
 }
