@@ -97,12 +97,12 @@ npm run dev          # 개발 모드 (watch)
 |----------|------|------|
 | Autonomous-QA-Agent | QA Inspector (이슈 발견) | C:/GIT/Autonomous-QA-Agent |
 | Claude-Opus-bluevlad | 표준/규칙 Hub | C:/GIT/Claude-Opus-bluevlad |
-| hopenvision | 대상 프로젝트 | C:/GIT/hopenvision |
-| AllergyInsight | 대상 프로젝트 | C:/GIT/AllergyInsight |
-| EduFit | 대상 프로젝트 | C:/GIT/EduFit |
-| NewsLetterPlatform | 대상 프로젝트 | C:/GIT/NewsLetterPlatform |
-| unmong-main | 대상 프로젝트 | C:/GIT/unmong-main |
-| StandUp | 대상 프로젝트 | C:/GIT/StandUp |
+| hopenvision | 자동 수정 대상 (React 전용 — Java는 별도 에이전트) | C:/GIT/hopenvision |
+| AllergyInsight | 자동 수정 대상 (full-stack) | C:/GIT/AllergyInsight |
+| NewsLetterPlatform | 자동 수정 대상 (full-stack) | C:/GIT/NewsLetterPlatform |
+
+> 자동 수정 대상은 위 3개 프로젝트로 한정 — QA Inspector 점검 범위와 동기화 (configs/projects.json `enabled: true`).
+> 제외 이력: academy-admin (hopenvision으로 통합), EduFit (서비스 종료), unmong-main / StandUp (현재 미대상).
 
 ## 참조 표준
 

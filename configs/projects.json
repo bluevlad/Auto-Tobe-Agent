@@ -134,30 +134,226 @@
       "scope": "frontend-only",
       "notes": "공무원 시험 채점 시스템 - Java 17, Spring Boot 3.2.2, React 19, TypeScript 5.9, PostgreSQL 16. 이 에이전트는 web-admin/ (React) 이슈만 처리 — Java 백엔드는 별도 Java 에이전트 담당."
     },
-    "academy-admin-frontend": {
-      "repo": "bluevlad/academy-admin-front-end-React",
-      "local_path": "${HOME}/GIT/academy-admin/frontend",
+    "allergyinsight": {
+      "repo": "bluevlad/AllergyInsight",
+      "local_path": "${HOME}/GIT/AllergyInsight",
       "tech_stack": {
-        "backend": "none",
-        "frontend": "react-vite-mui",
-        "database": "none",
-        "build_tool": "vite",
-        "language": "javascript-ts-partial"
+        "backend": "python-fastapi",
+        "frontend": "react-vite",
+        "database": "postgresql",
+        "build_tool": "pip+vite",
+        "language": "python+javascript"
       },
       "main_branch": "main",
+      "deploy_branch": "prod",
+      "docker_compose": {
+        "local": "docker-compose.dev.yml",
+        "production": "docker-compose.yml"
+      },
       "commands": {
+        "build_backend": "pip install -r requirements.txt",
+        "build_backend_cwd": "backend/",
+        "test_backend": "pytest",
+        "test_backend_cwd": "backend/",
         "build_frontend": "npm run build",
+        "build_frontend_cwd": "frontend/",
         "test_frontend": "npm test",
-        "lint_frontend": "npm run lint"
+        "test_frontend_cwd": "frontend/"
+      },
+      "ports": {
+        "frontend": 4040,
+        "backend": 9040
+      },
+      "urls": {
+        "frontend": "http://localhost:4040",
+        "backend": "http://localhost:9040",
+        "health": "http://localhost:9040/api/health"
       },
       "project_structure": {
-        "frontend_root": "",
-        "frontend_src": "src/"
+        "backend_root": "backend/",
+        "frontend_root": "frontend/",
+        "source_main": "backend/app/",
+        "source_test": "backend/tests/",
+        "frontend_src": "frontend/src/"
       },
-      "qa_agent_project": "academy-admin",
+      "docker": {
+        "compose_file": "docker-compose.yml",
+        "services": {
+          "backend": {
+            "container_name": "allergyinsight-backend",
+            "health_check": {
+              "type": "http",
+              "endpoint": "/api/health",
+              "port": 9040,
+              "interval_seconds": 600,
+              "timeout_seconds": 10,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": [
+                "Traceback",
+                "ERROR",
+                "Connection refused",
+                "asyncpg.exceptions",
+                "OperationalError"
+              ],
+              "warning": ["WARNING", "slow query", "pool exhausted"]
+            },
+            "resource_limits": {
+              "cpu_percent": 80,
+              "memory_mb": 1536,
+              "disk_percent": 85
+            },
+            "deploy": {
+              "build_context": "backend/",
+              "dockerfile": "backend/Dockerfile",
+              "rollback_on_failure": true,
+              "health_wait_seconds": 60
+            }
+          },
+          "scheduler": {
+            "container_name": "allergyinsight-scheduler",
+            "health_check": {
+              "type": "exec",
+              "command": "python -c \"import sys; sys.exit(0)\"",
+              "interval_seconds": 600,
+              "timeout_seconds": 10,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": ["Traceback", "ERROR", "scheduler crashed"],
+              "warning": ["WARNING", "job missed"]
+            },
+            "resource_limits": {
+              "cpu_percent": 60,
+              "memory_mb": 1024,
+              "disk_percent": 85
+            }
+          },
+          "frontend": {
+            "container_name": "allergyinsight-frontend",
+            "health_check": {
+              "type": "http",
+              "endpoint": "/",
+              "port": 4040,
+              "interval_seconds": 600,
+              "timeout_seconds": 5,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": ["Error", "ECONNREFUSED"],
+              "warning": ["WARN"]
+            },
+            "resource_limits": {
+              "cpu_percent": 60,
+              "memory_mb": 512,
+              "disk_percent": 85
+            },
+            "deploy": {
+              "build_context": ".",
+              "dockerfile": "frontend/Dockerfile",
+              "rollback_on_failure": true,
+              "health_wait_seconds": 30
+            }
+          }
+        }
+      },
+      "qa_agent_project": "allergyinsight",
       "enabled": true,
-      "scope": "frontend-only",
-      "notes": "Academy Admin 프론트엔드 (React 18 + Vite 6 + MUI 6). backend/ 디렉토리는 별도 Java 에이전트가 담당. repo는 프론트엔드 전용 저장소(academy-admin-front-end-React)로 직결 등록."
+      "scope": "full-stack",
+      "notes": "알러지 연구 논문 검색/분석 플랫폼. Python 3.10+ FastAPI + React 18 (JS) + PostgreSQL + ChromaDB. 별도 Python 전용 에이전트 미존재 → 이 에이전트가 백엔드+프론트 전체 담당."
+    },
+    "newsletterplatform": {
+      "repo": "bluevlad/NewsLetterPlatform",
+      "local_path": "${HOME}/GIT/NewsLetterPlatform",
+      "tech_stack": {
+        "backend": "python-fastapi",
+        "frontend": "jinja2",
+        "database": "sqlite",
+        "build_tool": "pip",
+        "language": "python"
+      },
+      "main_branch": "main",
+      "deploy_branch": "prod",
+      "docker_compose": {
+        "local": "docker-compose.yml",
+        "production": "docker-compose.prod.yml"
+      },
+      "commands": {
+        "build_backend": "pip install -r requirements.txt",
+        "test_backend": "pytest tests/"
+      },
+      "ports": {
+        "backend": 4050
+      },
+      "urls": {
+        "backend": "http://localhost:4050",
+        "health": "http://localhost:4050/"
+      },
+      "project_structure": {
+        "backend_root": "src/",
+        "source_main": "src/",
+        "source_test": "tests/"
+      },
+      "docker": {
+        "compose_file": "docker-compose.prod.yml",
+        "services": {
+          "newsletterplatform-web": {
+            "container_name": "newsletterplatform-web",
+            "health_check": {
+              "type": "http",
+              "endpoint": "/",
+              "port": 4050,
+              "interval_seconds": 600,
+              "timeout_seconds": 10,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": ["Traceback", "ERROR", "Connection refused", "OperationalError"],
+              "warning": ["WARNING"]
+            },
+            "resource_limits": {
+              "cpu_percent": 60,
+              "memory_mb": 512,
+              "disk_percent": 85
+            },
+            "deploy": {
+              "build_context": ".",
+              "dockerfile": "Dockerfile",
+              "rollback_on_failure": true,
+              "health_wait_seconds": 30
+            }
+          },
+          "newsletterplatform-scheduler": {
+            "container_name": "newsletterplatform-scheduler",
+            "health_check": {
+              "type": "exec",
+              "command": "python -c \"import sys; sys.exit(0)\"",
+              "interval_seconds": 600,
+              "timeout_seconds": 10,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": ["Traceback", "ERROR", "scheduler crashed", "job failed"],
+              "warning": ["WARNING", "job missed", "SMTP retry"]
+            },
+            "resource_limits": {
+              "cpu_percent": 50,
+              "memory_mb": 512,
+              "disk_percent": 85
+            }
+          }
+        }
+      },
+      "qa_agent_project": "newsletterplatform",
+      "enabled": true,
+      "scope": "full-stack",
+      "notes": "멀티테넌트 뉴스레터 플랫폼 (AllergyInsight 발송 등). Python 3.12+ FastAPI + APScheduler + SQLite + Jinja2. 프론트엔드 분리 없음 (서버 사이드 렌더링) — Python 전체를 이 에이전트가 담당."
     }
   }
 }
