@@ -80,7 +80,9 @@ npm run dev          # 개발 모드 (watch)
 2. **GitHub Issues = 계약 인터페이스** (두 Agent 간 직접 결합 없음)
 3. **우선순위별 차등 자동화** (P0/P1은 사람 승인, P2/P3는 완전 자동)
 4. **검증은 항상 Inspector가 수행** (Fixer 자기 검증 배제)
-5. **3-Tier 스케줄링**: 모니터링(10분) / 수정(3회/일) / 배포(30분) 분리
+5. **3-Tier 스케줄링**: 모니터링(10분) / 수정(1회/일, 00:30 단일) / 배포(30분) 분리
+   - 수정 배치는 00:30 단일 운영 — 점심/오후 슬롯은 개발자 작업과 충돌 위험으로 제거 (2026-05-01~)
+   - 22:00 QA Inspector / 04:30 medium-digest / 06~09시 deploy 창구와 모두 안전 버퍼 확보
 6. **보안**: 운영서버 경로/계정 정보는 git에 절대 커밋하지 않음
 
 ## Do NOT
@@ -97,11 +99,12 @@ npm run dev          # 개발 모드 (watch)
 |----------|------|------|
 | Autonomous-QA-Agent | QA Inspector (이슈 발견) | C:/GIT/Autonomous-QA-Agent |
 | Claude-Opus-bluevlad | 표준/규칙 Hub | C:/GIT/Claude-Opus-bluevlad |
-| hopenvision | 자동 수정 대상 (React 전용 — Java는 별도 에이전트) | C:/GIT/hopenvision |
-| AllergyInsight | 자동 수정 대상 (full-stack) | C:/GIT/AllergyInsight |
-| NewsLetterPlatform | 자동 수정 대상 (full-stack) | C:/GIT/NewsLetterPlatform |
+| hopenvision | **자동 수정 대상 (단일 집중)** — React 전용, Java는 별도 에이전트 | C:/GIT/hopenvision |
+| AllergyInsight | 자동 수정 대상 (full-stack) — **현재 비활성** | C:/GIT/AllergyInsight |
+| NewsLetterPlatform | 자동 수정 대상 (full-stack) — **현재 비활성** | C:/GIT/NewsLetterPlatform |
 
-> 자동 수정 대상은 위 3개 프로젝트로 한정 — QA Inspector 점검 범위와 동기화 (configs/projects.json `enabled: true`).
+> **현재 단계 (2026-05-01~): hopenvision-only 집중**.
+> baseline 메트릭 수집 + PR-blocking 환경 이슈(`spawn /bin/sh ENOENT`) 해소가 끝날 때까지 다른 프로젝트는 `enabled: false`. 재개 시 `configs/projects.json`에서 다시 `true`로 되돌리면 됨.
 > 제외 이력: academy-admin (hopenvision으로 통합), EduFit (서비스 종료), unmong-main / StandUp (현재 미대상).
 
 ## 참조 표준

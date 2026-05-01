@@ -11,8 +11,8 @@
     },
     "fix": {
       "enabled": true,
-      "schedule_hours": [1, 5],
-      "schedule_minutes": { "1": 0, "5": 0 },
+      "schedule_hours": [0],
+      "schedule_minutes": { "0": 30 },
       "max_duration_minutes": 120,
       "max_issues_per_service": 2,
       "round_robin": true,
@@ -30,9 +30,9 @@
     }
   },
   "scaling": {
-    "auto_adjust_schedule": true,
+    "auto_adjust_schedule": false,
     "max_services": 20,
     "add_batch_run_at_services": 5,
-    "extra_schedule_hours": [3, 7]
+    "extra_schedule_hours": []
   }
 }

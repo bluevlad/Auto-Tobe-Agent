@@ -262,9 +262,9 @@
         }
       },
       "qa_agent_project": "allergyinsight",
-      "enabled": true,
+      "enabled": false,
       "scope": "full-stack",
-      "notes": "알러지 연구 논문 검색/분석 플랫폼. Python 3.10+ FastAPI + React 18 (JS) + PostgreSQL + ChromaDB. 별도 Python 전용 에이전트 미존재 → 이 에이전트가 백엔드+프론트 전체 담당."
+      "notes": "알러지 연구 논문 검색/분석 플랫폼. Python 3.10+ FastAPI + React 18 (JS) + PostgreSQL + ChromaDB. 별도 Python 전용 에이전트 미존재 → 이 에이전트가 백엔드+프론트 전체 담당. [Phase: hopenvision-only 집중 기간 동안 비활성화 — 2026-05-01]"
     },
     "newsletterplatform": {
       "repo": "bluevlad/NewsLetterPlatform",
@@ -351,9 +351,9 @@
         }
       },
       "qa_agent_project": "newsletterplatform",
-      "enabled": true,
+      "enabled": false,
       "scope": "full-stack",
-      "notes": "멀티테넌트 뉴스레터 플랫폼 (AllergyInsight 발송 등). Python 3.12+ FastAPI + APScheduler + SQLite + Jinja2. 프론트엔드 분리 없음 (서버 사이드 렌더링) — Python 전체를 이 에이전트가 담당."
+      "notes": "멀티테넌트 뉴스레터 플랫폼 (AllergyInsight 발송 등). Python 3.12+ FastAPI + APScheduler + SQLite + Jinja2. 프론트엔드 분리 없음 (서버 사이드 렌더링) — Python 전체를 이 에이전트가 담당. [Phase: hopenvision-only 집중 기간 동안 비활성화 — 2026-05-01]"
     }
   }
 }
