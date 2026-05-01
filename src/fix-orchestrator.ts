@@ -346,6 +346,10 @@ function extractCommitScope(title: string): string {
  * Claude Code CLI 호출용 프롬프트를 구성합니다.
  */
 function buildFixPrompt(issue: ParsedIssue, project: ResolvedProject): string {
+  if (issue.category === 'tech-adoption') {
+    return buildTechAdoptionPrompt(issue, project);
+  }
+
   const lines: string[] = [];
 
   lines.push(`# GitHub Issue #${issue.number} 수정`);
@@ -411,6 +415,67 @@ function buildFixPrompt(issue: ParsedIssue, project: ResolvedProject): string {
   lines.push('- 필요한 최소한의 변경만 수행하세요');
   lines.push('- 새로운 의존성 추가를 최소화하세요');
   lines.push('- 수정 후 빌드와 테스트가 통과해야 합니다');
+  lines.push(`- 기술 스택: ${project.config.tech_stack.backend}, ${project.config.tech_stack.frontend}, ${project.config.tech_stack.database}`);
+  lines.push('');
+  lines.push('수정이 완료되면 변경사항을 커밋하지 마세요. 파일 수정만 해주세요.');
+
+  return lines.join('\n');
+}
+
+/**
+ * tech-adoption 전용 프롬프트 — defect 수정과 달리 도입 제안의 deps/config 변경만 적용.
+ *
+ * 본 함수는 changeScope 가 'deps-only' 또는 'config-only' 인 경우에만 호출된다
+ * (orchestrateFix 의 §1.5 가드에서 'code-modifying' 은 사전 차단됨).
+ */
+function buildTechAdoptionPrompt(issue: ParsedIssue, project: ResolvedProject): string {
+  const meta = issue.techAdoptionMeta;
+  const lines: string[] = [];
+
+  lines.push(`# Tech Adoption Proposal — Issue #${issue.number}`);
+  lines.push('');
+  lines.push(`**제목**: ${issue.title}`);
+  lines.push(`**우선순위**: ${issue.priority}`);
+  lines.push(`**카테고리**: tech-adoption (defect 수정이 아님 — 신규 기술 도입)`);
+  if (meta) {
+    lines.push(`**기술 키워드**: ${meta.techKeyword}`);
+    lines.push(`**난이도**: ${meta.difficulty} / **성숙도**: ${meta.maturity} / **스택**: ${meta.stack}`);
+    lines.push(`**변경 범위**: ${meta.changeScope}`);
+    lines.push(`**원본 보고서**: ${meta.sourceReport}`);
+  }
+  lines.push('');
+
+  if (issue.parsedContent.problem) {
+    lines.push('## 도입 배경');
+    lines.push(issue.parsedContent.problem);
+    lines.push('');
+  }
+
+  if (issue.parsedContent.recommendation) {
+    lines.push('## 적용 제안');
+    lines.push(issue.parsedContent.recommendation);
+    lines.push('');
+  }
+
+  if (meta?.targetFiles?.length) {
+    lines.push('## 변경 대상 파일 (이 목록 외 파일 수정 금지)');
+    for (const f of meta.targetFiles) {
+      lines.push(`- \`${f}\``);
+    }
+    lines.push('');
+  }
+
+  lines.push('## 변경 규칙 (엄수)');
+  if (meta?.changeScope === 'deps-only') {
+    lines.push('- **deps-only 모드**: 의존성 manifest (pom.xml, build.gradle, package.json, requirements.txt) 만 수정 가능');
+    lines.push('- 소스 코드 (.java/.ts/.tsx/.py/.js) 는 수정 금지');
+    lines.push('- 설정 파일도 수정 금지 (별도 PR 필요)');
+  } else if (meta?.changeScope === 'config-only') {
+    lines.push('- **config-only 모드**: 설정 파일 (application.yml, *.json, *.properties, .env.example) 만 수정 가능');
+    lines.push('- 소스 코드 및 의존성 manifest 는 수정 금지');
+  }
+  lines.push('- 변경 대상 파일 목록 외 파일은 절대 수정하지 마세요');
+  lines.push('- 본 PR 은 자동 머지되지 않으며 사람 검토를 거칩니다 — 보수적이고 작은 변경을 선호하세요');
   lines.push(`- 기술 스택: ${project.config.tech_stack.backend}, ${project.config.tech_stack.frontend}, ${project.config.tech_stack.database}`);
   lines.push('');
   lines.push('수정이 완료되면 변경사항을 커밋하지 마세요. 파일 수정만 해주세요.');
@@ -689,13 +754,15 @@ function createInitialResult(
   project: ResolvedProject,
   policy: PriorityPolicy,
 ): FixResult {
+  // tech-adoption은 정책 매핑된 strategy 대신 전용 어휘 사용 (대시보드 분류 일관성)
+  const strategy = issue.category === 'tech-adoption' ? 'tech-adoption-template' : policy.fix_strategy;
   return {
     issueNumber: issue.number,
     project: project.name,
     repo: issue.repo,
     priority: issue.priority,
     category: issue.category,
-    strategy: policy.fix_strategy,
+    strategy,
     status: 'pending',
     modifiedFiles: [],
     verifications: [],
@@ -762,6 +829,35 @@ export async function orchestrateFix(
     return result;
   }
 
+  // 1.5 tech-adoption 화이트리스트 — code-modifying scope는 자동 적용 차단 (사람 구현 필수)
+  if (issue.category === 'tech-adoption') {
+    const scope = issue.techAdoptionMeta?.changeScope;
+    if (scope === 'code-modifying') {
+      console.log('  SKIP: tech-adoption code-modifying scope는 자동 적용 차단 (사람 검토 필요)');
+      result.status = 'skipped';
+      result.error = 'tech-adoption with code-modifying scope requires manual implementation';
+      result.completedAt = new Date().toISOString();
+      return result;
+    }
+    if (scope === undefined) {
+      console.log('  SKIP: tech-adoption 이슈에 changeScope 메타가 없음 (deps-only/config-only 명시 필요)');
+      result.status = 'skipped';
+      result.error = 'tech-adoption requires changeScope in TECH-ADOPTION-META';
+      result.completedAt = new Date().toISOString();
+      return result;
+    }
+    // tech-adoption 스택 필터 — hopenvision은 react만 처리
+    const stack = issue.techAdoptionMeta?.stack;
+    const projectScope = project.config.scope;
+    if (projectScope === 'frontend-only' && stack !== 'react' && stack !== undefined) {
+      console.log(`  SKIP: 프로젝트 scope=${projectScope}와 tech-adoption stack=${stack} 불일치`);
+      result.status = 'skipped';
+      result.error = `Stack mismatch: project=${projectScope} vs proposal=${stack}`;
+      result.completedAt = new Date().toISOString();
+      return result;
+    }
+  }
+
   // 2. 충돌 안전성 검증 (사람 작업 중 감지)
   const conflictCheck = await checkConflictSafety(cwd, mainBranch);
   if (!conflictCheck.safe) {
@@ -775,8 +871,11 @@ export async function orchestrateFix(
   // 2.5 중복 이슈 키 생성
   const deduplicationKey = extractDeduplicationKey(issue.title);
 
-  // 3. 브랜치 생성
-  const branchName = `${policyConfig.global_rules.branch_prefix}/${issue.number}-${toBranchSlug(issue.title)}`;
+  // 3. 브랜치 생성 — tech-adoption 은 별도 prefix 로 PR 목록에서 식별 용이
+  const branchPrefix = issue.category === 'tech-adoption'
+    ? 'tech-adoption'
+    : policyConfig.global_rules.branch_prefix;
+  const branchName = `${branchPrefix}/${issue.number}-${toBranchSlug(issue.title)}`;
   result.branchName = branchName;
   result.status = 'in_progress';
   result.deduplicationKey = deduplicationKey;

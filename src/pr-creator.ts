@@ -37,21 +37,24 @@ function categoryToScope(category: string): string {
     operations: 'ops',
     frontend: 'ui',
     testing: 'test',
+    'tech-adoption': 'deps',
   };
   return map[category] ?? 'core';
 }
 
 /**
  * PR 제목을 생성합니다.
- * COMMIT_CONVENTION 표준: fix(scope): subject (50자 이내)
+ * COMMIT_CONVENTION 표준:
+ *   - fix(scope): subject — defect 수정
+ *   - feat(scope): subject — tech-adoption 신규 도입 (defect 가 아니므로 fix 가 아님)
  */
 function buildPrTitle(fixResult: FixResult): string {
   const scope = categoryToScope(fixResult.category);
-  // 브랜치명에서 설명 추출 (bugfix/39-slug → slug)
   const slug = fixResult.branchName
-    ?.replace(/^(?:bugfix|fix|feature|hotfix)\/\d+-/, '')
+    ?.replace(/^(?:bugfix|fix|feature|hotfix|tech-adoption)\/\d+-/, '')
     .replace(/-/g, ' ') ?? 'auto fix';
-  return `fix(${scope}): ${slug}`.substring(0, 70);
+  const verb = fixResult.category === 'tech-adoption' ? 'feat' : 'fix';
+  return `${verb}(${scope}): ${slug}`.substring(0, 70);
 }
 
 /**
@@ -270,9 +273,12 @@ export async function createPullRequest(
 
   try {
     // 2. 프로젝트 로컬 경로에서 작업
+    //   project-resolver와 동일하게 ${ENV_VAR} 확장 후 파싱해야 cwd가 실제 디렉토리가 됨.
+    //   확장 누락 시 cwd가 존재하지 않아 Node exec가 "spawn /bin/sh ENOENT"로 실패한다.
     const projectsConfigPath = resolve(__dirname, '..', 'configs', 'projects.json');
-    const projectsContent = readFileSync(projectsConfigPath, 'utf-8');
-    const projectsConfig = JSON.parse(projectsContent);
+    const projectsRaw = readFileSync(projectsConfigPath, 'utf-8');
+    const projectsExpanded = projectsRaw.replace(/\$\{(\w+)\}/g, (_, name: string) => process.env[name] ?? '');
+    const projectsConfig = JSON.parse(projectsExpanded);
     const projectConfig = projectsConfig.projects[fixResult.project];
     const cwd = projectConfig?.local_path;
 
@@ -284,21 +290,29 @@ export async function createPullRequest(
     console.log(`  Pushing ${fixResult.branchName}...`);
     await pushBranch(fixResult.branchName, cwd);
 
-    // 4. PR 생성 (파일 충돌 감지 시 draft로 생성)
+    // 4. PR 생성 (파일 충돌 또는 tech-adoption 카테고리 시 draft로 생성)
     const hasFileConflicts = fixResult.fileConflicts != null
       && fixResult.fileConflicts.conflictingFiles.length > 0;
+    const isTechAdoption = fixResult.category === 'tech-adoption';
+    const draftMode = hasFileConflicts || isTechAdoption;
+
     const title = buildPrTitle(fixResult);
     const body = buildPrBody(fixResult);
+    // tech-adoption은 자동 머지 차단을 위해 항상 reviewer 지정 (default_reviewers 사용)
     const reviewers = policy.required_reviewers.length > 0
       ? policy.required_reviewers
-      : policyConfig.default_reviewers;
+      : (isTechAdoption ? policyConfig.default_reviewers : policyConfig.default_reviewers);
     const labels = [`${fixResult.priority}`, fixResult.category, 'auto-fix'];
     if (isCiPending) {
       labels.push('needs-ci-verification');
     }
+    if (isTechAdoption) {
+      labels.push('needs-human-review');
+    }
 
-    if (hasFileConflicts) {
-      console.log(`  Creating DRAFT PR (파일 충돌 감지됨): ${title}`);
+    if (draftMode) {
+      const reason = isTechAdoption ? 'tech-adoption (사람 리뷰 필수)' : '파일 충돌 감지됨';
+      console.log(`  Creating DRAFT PR (${reason}): ${title}`);
     } else {
       console.log(`  Creating PR: ${title}`);
     }
@@ -311,7 +325,7 @@ export async function createPullRequest(
       reviewers,
       labels,
       cwd,
-      hasFileConflicts,
+      draftMode,
     );
 
     updated.prUrl = pr.url;
@@ -327,7 +341,7 @@ export async function createPullRequest(
       );
     }
 
-    console.log(`  PR created: ${pr.url}${hasFileConflicts ? ' (draft)' : ''}`);
+    console.log(`  PR created: ${pr.url}${draftMode ? ' (draft)' : ''}`);
 
     return updated;
   } catch (error) {

@@ -2,7 +2,12 @@ export type {
   Priority,
   IssueCategory,
   FixStrategy,
+  IssueSource,
+  FixSource,
+  DiscoveryMethod,
+  ChangeScope,
   QaAgentMeta,
+  TechAdoptionMeta,
   ParsedIssue,
   IssueParseError,
 } from './issue.js';

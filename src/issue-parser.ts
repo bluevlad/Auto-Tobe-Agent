@@ -5,7 +5,9 @@ import type {
   IssueParseError,
   Priority,
   IssueCategory,
+  IssueSource,
   QaAgentMeta,
+  TechAdoptionMeta,
 } from './types/index.js';
 
 const execAsync = promisify(exec);
@@ -42,15 +44,21 @@ const CATEGORY_MAP: Record<string, IssueCategory> = {
   performance: 'performance',
   architecture: 'architecture',
   codequality: 'code-quality',
+  'code-quality': 'code-quality',
   operations: 'operations',
   frontend: 'frontend',
   testing: 'testing',
+  techadoption: 'tech-adoption',
+  'tech-adoption': 'tech-adoption',
 };
 
 // --- 본문 파싱 ---
 
 /** QA-AGENT-META 블록 추출 */
 const QA_META_RE = /<!--\s*QA-AGENT-META\s*\n([\s\S]*?)\n\s*-->/;
+
+/** TECH-ADOPTION-META 블록 추출 (medium-digest-agent 발행) */
+const TECH_ADOPTION_META_RE = /<!--\s*TECH-ADOPTION-META\s*\n([\s\S]*?)\n\s*-->/;
 
 /** 마크다운 ## 섹션 분리 */
 const SECTION_RE = /^## (.+)$/gm;
@@ -130,6 +138,30 @@ function extractCategory(title: string, labels: string[]): IssueCategory {
   if (lowerTitle.includes('docker') || lowerTitle.includes('deploy') || lowerTitle.includes('배포')) return 'operations';
 
   return 'code-quality';
+}
+
+/**
+ * 라벨에서 이슈 출처를 결정합니다 — `source/tech-adoption` 라벨이 있으면 tech-adoption,
+ * 그 외에는 qa-agent (기존 동작 유지).
+ */
+function extractSource(labels: string[]): IssueSource {
+  if (labels.some((l) => l === 'source/tech-adoption' || l === 'tech-adoption')) {
+    return 'tech-adoption';
+  }
+  return 'qa-agent';
+}
+
+/**
+ * 본문에서 TECH-ADOPTION-META 블록을 추출합니다.
+ */
+function extractTechAdoptionMeta(body: string): TechAdoptionMeta | undefined {
+  const match = body.match(TECH_ADOPTION_META_RE);
+  if (!match) return undefined;
+  try {
+    return JSON.parse(match[1]) as TechAdoptionMeta;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -243,6 +275,11 @@ function determineAutoFixable(
   title?: string,
   labels?: string[],
 ): boolean {
+  // tech-adoption 카테고리는 항상 사람 검토 단계 필요 → fix-orchestrator에서
+  // draft PR + auto-merge 차단 처리. determineAutoFixable은 true로 두어 자동 시도는 하되
+  // 머지 자동화는 별도 차단 (fix-orchestrator.ts).
+  if (category === 'tech-adoption') return true;
+
   // QA-AGENT-META가 있으면 그 판단을 존중
   if (meta?.auto_fixable !== undefined) return meta.auto_fixable;
 
@@ -279,11 +316,17 @@ export async function parseIssue(
     const labels = issue.labels.map((l) => l.name);
     const priority = extractPriority(issue.title, labels);
     const category = extractCategory(issue.title, labels);
-    const meta = extractQaAgentMeta(issue.body);
+    const source = extractSource(labels);
+    const meta = source === 'qa-agent' ? extractQaAgentMeta(issue.body) : undefined;
+    const techAdoptionMeta = source === 'tech-adoption' ? extractTechAdoptionMeta(issue.body) : undefined;
     const parsedContent = parseBodyContent(issue.body);
 
-    // QA-AGENT-META 또는 본문에서 runId 추출
-    const sourceRunId = meta?.runId ?? extractRunIdFromBody(issue.body);
+    // QA-AGENT-META 또는 본문에서 runId 추출 (tech-adoption은 runId 없음)
+    const sourceRunId = source === 'qa-agent' ? (meta?.runId ?? extractRunIdFromBody(issue.body)) : undefined;
+
+    const resolvedCategory: IssueCategory =
+      source === 'tech-adoption' ? 'tech-adoption' : (meta?.category ?? category);
+    const resolvedPriority = techAdoptionMeta?.priority ?? meta?.priority ?? priority;
 
     return {
       number: issue.number,
@@ -292,13 +335,15 @@ export async function parseIssue(
       url: issue.url,
       repo,
       labels,
-      priority: meta?.priority ?? priority,
-      category: meta?.category ?? category,
+      priority: resolvedPriority,
+      category: resolvedCategory,
+      source,
       meta,
+      techAdoptionMeta,
       parsedContent,
       sourceRunId,
       createdAt: issue.createdAt,
-      isAutoFixable: determineAutoFixable(priority, category, meta, issue.title, labels),
+      isAutoFixable: determineAutoFixable(priority, resolvedCategory, meta, issue.title, labels),
       deduplicationKey: extractDeduplicationKey(issue.title),
     };
   } catch (error) {

@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import type { FixResult } from './types/index.js';
+import type { FixResult, DiscoveryMethod, FixSource } from './types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -80,6 +80,21 @@ function resolveEnvVar(value: string): string {
 }
 
 /**
+ * FixResult의 카테고리/전략에서 discovery_method를 결정합니다.
+ *
+ * Claude-Opus-bluevlad/standards/qa/FIX_RESULT_REGISTRATION.md §5 어휘 사전 사용.
+ * - tech-adoption 카테고리 → tech_adoption_proposal (§5.3)
+ * - 그 외 (QA Agent 흐름) → scheduled_scan (§5.1)
+ */
+function resolveDiscoveryMethod(result: FixResult): DiscoveryMethod {
+  if (result.category === 'tech-adoption') return 'tech_adoption_proposal';
+  return 'scheduled_scan';
+}
+
+const FIX_SOURCE: FixSource = 'agent';
+const ACTOR = 'auto-tobe-agent';
+
+/**
  * FixResult를 Dashboard API 페이로드로 변환합니다.
  */
 function toPayload(result: FixResult): Record<string, unknown> {
@@ -90,6 +105,9 @@ function toPayload(result: FixResult): Record<string, unknown> {
     priority: result.priority,
     category: result.category,
     strategy: result.strategy,
+    fixSource: FIX_SOURCE,
+    discoveryMethod: resolveDiscoveryMethod(result),
+    actor: ACTOR,
     status: result.status,
     branchName: result.branchName ?? null,
     commitHash: result.commitHash ?? null,
