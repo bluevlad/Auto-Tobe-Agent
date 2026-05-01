@@ -43,16 +43,28 @@ npm run dev          # 개발 모드 (watch)
 | 모듈 | 역할 | Phase |
 |------|------|-------|
 | `index.ts` | 메인 엔트리포인트 (CLI) | 1 |
-| `issue-parser.ts` | GitHub Issue에서 QA-AGENT-META 추출 | 2 |
+| `issue-parser.ts` | GitHub Issue 파싱 (QA-AGENT-META + TECH-ADOPTION-META, source 라벨 분기) | 2 |
 | `project-resolver.ts` | 프로젝트 경로/설정 매핑 | 2 |
-| `fix-orchestrator.ts` | 수정 워크플로우 오케스트레이션 | 3 |
-| `pr-creator.ts` | PR 생성 및 관리 | 3 |
+| `fix-orchestrator.ts` | 수정 워크플로우 오케스트레이션 (tech-adoption 안전장치 §1.5 포함) | 3 |
+| `pr-creator.ts` | PR 생성 (tech-adoption 강제 draft + needs-human-review 라벨) | 3 |
 | `fix-history.ts` | 처리 이력 관리 및 중복 방지 | 3 |
+| `dashboard-reporter.ts` | QA-Dashboard fix-results API 등록 (fixSource/discoveryMethod 표준 어휘) | 4 |
 | `verification-reporter.ts` | QA Agent 연동 (검증 요청) | 4 |
 | `docker-monitor.ts` | Docker 서비스 Health Monitor | 7 |
 | `issue-correlator.ts` | Docker 이슈 ↔ GitHub Issue 상관관계 | 8 |
 | `docker-deployer.ts` | Docker 빌드/배포/롤백 관리 | 9 |
 | `round-robin-scheduler.ts` | Multi-Service Round-Robin 배치 스케줄러 | 10 |
+
+### 두 입력 채널
+
+이 에이전트는 두 종류의 GitHub Issue 를 처리합니다 — `source/*` 라벨로 분기:
+
+| 라벨 | 발행자 | category | 처리 방식 |
+|------|--------|----------|----------|
+| `source/qa-agent` (default) | Autonomous-QA-Agent | security/performance/... | 우선순위 기반 자동 fix + (P2/P3) auto-merge |
+| `source/tech-adoption` | medium-digest-agent | `tech-adoption` | 항상 **draft PR + needs-human-review** + 변경 범위 화이트리스트 |
+
+> tech-adoption 채널의 end-to-end 흐름과 안전장치 7계층은 [`Claude-Opus-bluevlad/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md`](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md) 참조.
 
 ### 설정 파일 (`configs/`)
 
@@ -67,7 +79,7 @@ npm run dev          # 개발 모드 (watch)
 
 | 파일 | 주요 타입 |
 |------|----------|
-| `issue.ts` | ParsedIssue, QaAgentMeta, Priority, IssueCategory |
+| `issue.ts` | ParsedIssue, QaAgentMeta, **TechAdoptionMeta, IssueSource, FixSource, DiscoveryMethod, ChangeScope**, Priority, IssueCategory (`tech-adoption` 포함), FixStrategy (`tech-adoption-template` 포함) |
 | `project.ts` | ProjectConfig, ResolvedProject, TechStack |
 | `fix-result.ts` | FixResult, FixStatus, BatchFixResult |
 | `approval-policy.ts` | ApprovalPolicyConfig, PriorityPolicy |
@@ -107,12 +119,18 @@ npm run dev          # 개발 모드 (watch)
 > baseline 메트릭 수집 + PR-blocking 환경 이슈(`spawn /bin/sh ENOENT`) 해소가 끝날 때까지 다른 프로젝트는 `enabled: false`. 재개 시 `configs/projects.json`에서 다시 `true`로 되돌리면 됨.
 > 제외 이력: academy-admin (hopenvision으로 통합), EduFit (서비스 종료), unmong-main / StandUp (현재 미대상).
 
-## 참조 표준
+## 참조 표준 (모두 Claude-Opus-bluevlad)
 
-- Commit: C:/GIT/Claude-Opus-bluevlad/standards/git/COMMIT_CONVENTION.md
-- Branch: C:/GIT/Claude-Opus-bluevlad/standards/git/BRANCH_CONVENTION.md
-- Issue Fix: C:/GIT/Claude-Opus-bluevlad/standards/claude-code/ISSUE_FIX_WORKFLOW.md
-- Agent 충돌 방지: C:/GIT/Claude-Opus-bluevlad/standards/claude-code/AGENT_CONFLICT_PREVENTION_GUIDE.md
+| 영역 | 파일 |
+|------|------|
+| Commit 컨벤션 | `standards/git/COMMIT_CONVENTION.md` |
+| Branch 컨벤션 | `standards/git/BRANCH_CONVENTION.md` |
+| Issue Fix 워크플로우 | `standards/claude-code/ISSUE_FIX_WORKFLOW.md` |
+| Agent 충돌 방지 | `standards/claude-code/AGENT_CONFLICT_PREVENTION_GUIDE.md` |
+| **tech-adoption 채널 (end-to-end)** | `services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md` |
+| Lifecycle 통합 (QA-Dashboard) | `services/auto-tobe-agent/LIFECYCLE_INTEGRATION.md` |
+| Fix 결과 등록 표준 | `standards/qa/FIX_RESULT_REGISTRATION.md` |
+| Error 분류 (Root-Cause/Error-Category) | `standards/git/ERROR_TAXONOMY.md` |
 
 ## Fix 커밋 오류 추적
 
