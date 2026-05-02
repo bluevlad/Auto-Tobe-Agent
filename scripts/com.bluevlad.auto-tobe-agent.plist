@@ -4,8 +4,8 @@
 <!--
   Auto-Tobe-Agent launchd 배치 설정 (Tier 2: Fix 배치)
   사람 비활성 시간(새벽)에 1회만 실행하여 개발자 작업과의 충돌을 회피합니다.
-    - 00:30 단일 수정 배치 (QA Agent 전날 22:00 점검 결과 처리)
-      · 22:00 QA Inspector 종료와 2.5h 버퍼
+    - 00:30 단일 수정 배치 (QA Agent 전날 23:00 점검 + 23:30 DB 마이그레이션 결과 처리)
+      · 23:30 QA Migration 종료와 1h 버퍼
       · 04:30 medium-digest 시작과 4h 버퍼
       · 06~09시 deploy 창구와 5.5h 버퍼
 
