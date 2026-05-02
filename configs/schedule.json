@@ -11,9 +11,9 @@
     },
     "fix": {
       "enabled": true,
-      "schedule_hours": [0],
-      "schedule_minutes": { "0": 30 },
-      "max_duration_minutes": 120,
+      "schedule_hours": [1],
+      "schedule_minutes": { "1": 30 },
+      "max_duration_minutes": 90,
       "max_issues_per_service": 2,
       "round_robin": true,
       "priority_order": ["P0", "P1", "P2", "P3"],
