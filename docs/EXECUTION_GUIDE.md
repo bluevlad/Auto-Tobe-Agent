@@ -54,7 +54,7 @@ macOS launchd (OS 레벨 서비스 관리자)
 |------|------|
 | plist | `com.bluevlad.auto-tobe-agent.plist` |
 | Label | `com.bluevlad.auto-tobe-agent` |
-| 주기 | 하루 2회 (StartCalendarInterval: 01:00, 05:00) |
+| 주기 | 하루 1회 (StartCalendarInterval: 01:30) |
 | 시작 | 로그인 시 실행 안 함 (RunAtLoad: false) |
 | 실행 | `scripts/run-batch.sh` → `node dist/index.js batch` |
 | 로그 | `logs/launchd-stdout.log` |
@@ -62,8 +62,8 @@ macOS launchd (OS 레벨 서비스 관리자)
 **역할**: Round-Robin으로 이슈 수정, PR 생성, 검증 요청
 
 **시간대 설계 근거**:
-- 01:00 — QA Agent 전날 22:00 점검 결과를 처리하는 메인 배치
-- 05:00 — 재시도 + 잔여 이슈 처리하는 보충 배치
+- 01:30 — QA Agent 전날 23:30 점검(hopenvision-only) 결과를 처리하는 단일 배치
+- max_duration 90분으로 03:00 종료 보장 → 04:30 medium-digest까지 1h 버퍼 확보
 - 새벽 실행으로 사람 작업과의 충돌 방지 (AGENT_CONFLICT_PREVENTION_GUIDE §2.1)
 
 ### 2.3 Tier 3: Deploy
@@ -203,9 +203,10 @@ logs/
 
 ```
 00:00 ─────────────────────────────────────────────
-01:00  [Tier 2] Fix 배치 1차 (6개 프로젝트 × 2이슈 = 최대 12건)
+01:30  [Tier 2] Fix 배치 단일 (hopenvision × 최대 2이슈)
        │ 충돌 검증 → Round-Robin → Claude CLI → PR 생성
-05:00  [Tier 2] Fix 배치 2차
+       │ max_duration 90분 → 03:00 종료 보장
+04:30  medium-digest (별도 에이전트)
 06:00  [Tier 3] 배포 시작 (머지된 PR → docker build/deploy)
        │ db → backend → frontend 순서, 실패 시 롤백
 09:00  [Tier 3] 배포 종료
@@ -214,7 +215,7 @@ logs/
        사람: PR 리뷰/승인, 직접 개발
 18:00 ─────────────────────────────────────────────
        [Tier 1] 모니터링 계속
-22:00  QA Agent (Windows): 점검 실행 → GitHub Issue 등록
+23:30  QA Agent (Windows): hopenvision 점검 → GitHub Issue 등록
 24:00 ─────────────────────────────────────────────
 ```
 
