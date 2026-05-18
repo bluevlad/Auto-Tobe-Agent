@@ -1,3 +1,7 @@
+# Env (LLMOps API key 등 민감정보)
+.env
+.env.local
+
 # Dependencies
 node_modules/
 
