@@ -45,7 +45,7 @@ npm run dev          # 개발 모드 (watch)
 | `index.ts` | 메인 엔트리포인트 (CLI) | 1 |
 | `issue-parser.ts` | GitHub Issue 파싱 (QA-AGENT-META + TECH-ADOPTION-META, source 라벨 분기, W6 origin/게이트 라벨) | 2 |
 | `project-resolver.ts` | 프로젝트 경로/설정 매핑 | 2 |
-| `fix-orchestrator.ts` | 수정 워크플로우 오케스트레이션 (tech-adoption 안전장치 §1.5 포함) | 3 |
+| `fix-orchestrator.ts` | 수정 워크플로우 오케스트레이션 (tech-adoption 안전장치 §1.5, W6 게이트 §1.2, 스킬 기반 프롬프트 + FIX-REPORT 구조화 출력) | 3 |
 | `pr-creator.ts` | PR 생성 (tech-adoption 강제 draft + needs-human-review 라벨) | 3 |
 | `fix-history.ts` | 처리 이력 관리 및 중복 방지 | 3 |
 | `dashboard-reporter.ts` | QA-Dashboard fix-results API 등록 (fixSource/discoveryMethod 표준 어휘) | 4 |
@@ -66,6 +66,10 @@ npm run dev          # 개발 모드 (watch)
 
 **W6 게이트 라벨 (2026-07-19~)**: QA Agent가 `origin:*` 라벨(qa-runtime/qa-static/qa-external-tech/qa-rag-quality/qa-improvement)을 붙이는 신형 이슈는 게이트를 따름 —
 `auto-fix` 라벨이 있어야 자동 처리, `human-approval-required`(또는 origin이 qa-external-tech/qa-rag-quality)면 수정 후 **draft PR + needs-human-review**. origin 라벨이 없는 구형 이슈는 기존 동작 유지.
+
+**스킬 기반 fix + 구조화 출력 (2026-07-19~)**:
+- 대상 repo에 `.claude/skills/fix-qa-issue/SKILL.md`가 있으면 `/fix-qa-issue` 호출로 프로젝트별 수정 규칙을 repo 쪽 스킬에서 로드 (3개 대상 repo에 배치 완료). 스킬 미배치 repo는 레거시 전체 프롬프트 fallback.
+- CLI는 `--output-format json`으로 호출하고, 응답의 `FIX-REPORT` 블록을 파싱해 fix 커밋에 **ERROR_TAXONOMY footer**(Discovery-Method/Root-Cause/Error-Category/Affected-Layer/Prevention)를 자동 생성 — 대상 repo의 `register-fix-to-dashboard.yml`이 이 footer를 파싱해 QA Dashboard에 등록.
 
 > tech-adoption 채널의 end-to-end 흐름과 안전장치 7계층은 [`Claude-Opus-bluevlad/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md`](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md) 참조.
 

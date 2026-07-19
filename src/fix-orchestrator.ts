@@ -7,6 +7,7 @@ import type {
   ParsedIssue,
   ResolvedProject,
   FixResult,
+  FixReport,
   ModifiedFile,
   VerificationResult,
   ConflictCheckResult,
@@ -343,14 +344,51 @@ function extractCommitScope(title: string): string {
 }
 
 /**
+ * 대상 repo에 fix-qa-issue 프로젝트 스킬이 있는지 확인합니다.
+ *
+ * 스킬(.claude/skills/fix-qa-issue/SKILL.md)이 있으면 프로젝트별 수정 규칙·빌드/테스트
+ * 명령이 repo 쪽에서 버전 관리되므로, 오케스트레이터는 이슈 컨텍스트만 전달한다 (C-1).
+ */
+function hasFixSkill(project: ResolvedProject): boolean {
+  return existsSync(
+    resolve(project.config.local_path, '.claude', 'skills', 'fix-qa-issue', 'SKILL.md'),
+  );
+}
+
+/** FIX-REPORT 구조화 출력 지시 — 커밋 footer(ERROR_TAXONOMY) 자동 생성용 (C-2) */
+function fixReportInstruction(): string[] {
+  return [
+    '## 완료 보고 (필수)',
+    '수정을 마친 뒤 응답 마지막에 아래 형식의 FIX-REPORT 블록을 정확히 출력하세요:',
+    '',
+    '```',
+    '<!-- FIX-REPORT',
+    '{"summary": "수정 내용 한 줄", "rootCause": "import-error|shell-compat|async-handling|type-mismatch|env-assumption|config-format|logic-error|selector-drift|dependency-issue 중 택1 또는 자유 kebab-case", "errorCategory": "logic-error|compat-issue|config-error|test-issue|security-issue 중 택1", "affectedLayer": "backend/api 형식", "prevention": "재발 방지책 한 줄"}',
+    '-->',
+    '```',
+    '',
+    '수정이 완료되면 변경사항을 커밋하지 마세요. 파일 수정만 해주세요.',
+  ];
+}
+
+/**
  * Claude Code CLI 호출용 프롬프트를 구성합니다.
+ *
+ * 대상 repo에 fix-qa-issue 스킬이 있으면 `/fix-qa-issue` 호출로 시작해
+ * 프로젝트별 규칙을 스킬에서 로드하고, 없으면 레거시 전체 프롬프트를 사용한다.
  */
 function buildFixPrompt(issue: ParsedIssue, project: ResolvedProject): string {
   if (issue.category === 'tech-adoption') {
     return buildTechAdoptionPrompt(issue, project);
   }
 
+  const useSkill = hasFixSkill(project);
   const lines: string[] = [];
+
+  if (useSkill) {
+    lines.push('/fix-qa-issue');
+    lines.push('');
+  }
 
   lines.push(`# GitHub Issue #${issue.number} 수정`);
   lines.push('');
@@ -410,14 +448,18 @@ function buildFixPrompt(issue: ParsedIssue, project: ResolvedProject): string {
     lines.push('');
   }
 
-  lines.push('## 수정 규칙');
-  lines.push('- 기존 코드 스타일을 유지하세요');
-  lines.push('- 필요한 최소한의 변경만 수행하세요');
-  lines.push('- 새로운 의존성 추가를 최소화하세요');
-  lines.push('- 수정 후 빌드와 테스트가 통과해야 합니다');
-  lines.push(`- 기술 스택: ${project.config.tech_stack.backend}, ${project.config.tech_stack.frontend}, ${project.config.tech_stack.database}`);
-  lines.push('');
-  lines.push('수정이 완료되면 변경사항을 커밋하지 마세요. 파일 수정만 해주세요.');
+  if (!useSkill) {
+    // 레거시 프롬프트 — 스킬 미배치 repo용 공통 수정 규칙
+    lines.push('## 수정 규칙');
+    lines.push('- 기존 코드 스타일을 유지하세요');
+    lines.push('- 필요한 최소한의 변경만 수행하세요');
+    lines.push('- 새로운 의존성 추가를 최소화하세요');
+    lines.push('- 수정 후 빌드와 테스트가 통과해야 합니다');
+    lines.push(`- 기술 스택: ${project.config.tech_stack.backend}, ${project.config.tech_stack.frontend}, ${project.config.tech_stack.database}`);
+    lines.push('');
+  }
+
+  lines.push(...fixReportInstruction());
 
   return lines.join('\n');
 }
@@ -525,9 +567,51 @@ function buildAllowedTools(project: ResolvedProject): string[] {
   return tools;
 }
 
+/** FIX-REPORT 블록 추출 (CLI 응답 텍스트에서) */
+const FIX_REPORT_RE = /<!--\s*FIX-REPORT\s*\n([\s\S]*?)\n\s*-->/;
+
+/**
+ * CLI 응답에서 FIX-REPORT 구조화 블록을 파싱합니다 (C-2).
+ * 블록이 없거나 JSON이 깨졌으면 undefined — 커밋 footer 생성만 생략되고 수정 흐름은 계속.
+ */
+function parseFixReport(output: string): FixReport | undefined {
+  const match = output.match(FIX_REPORT_RE);
+  if (!match) return undefined;
+  try {
+    const raw = JSON.parse(match[1]) as Record<string, unknown>;
+    const str = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.trim() ? v.trim() : undefined;
+    return {
+      summary: str(raw.summary),
+      rootCause: str(raw.rootCause),
+      errorCategory: str(raw.errorCategory),
+      affectedLayer: str(raw.affectedLayer),
+      prevention: str(raw.prevention),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `--output-format json` 응답에서 결과 텍스트를 추출합니다.
+ * JSON 파싱 실패 시 원본 stdout을 그대로 반환 (구버전 CLI 호환).
+ */
+function extractCliResult(stdout: string): { text: string; isError: boolean } {
+  try {
+    const parsed = JSON.parse(stdout.trim()) as Record<string, unknown>;
+    const text = typeof parsed.result === 'string' ? parsed.result : stdout;
+    const isError = parsed.is_error === true;
+    return { text, isError };
+  } catch {
+    return { text: stdout, isError: false };
+  }
+}
+
 /**
  * Claude Code CLI를 호출하여 코드를 수정합니다.
  * spawn으로 프롬프트를 stdin에 전달하여 인자 길이 제한을 회피합니다.
+ * --output-format json으로 결과 텍스트를 안정적으로 추출합니다 (C-2).
  */
 function invokeClaudeCode(
   prompt: string,
@@ -542,6 +626,7 @@ function invokeClaudeCode(
     const localBin = resolve(home, '.local', 'bin');
     const child = spawn(claudePath, [
       '-p',
+      '--output-format', 'json',
       '--allowedTools', allowedTools.join(','),
     ], {
       cwd,
@@ -574,7 +659,12 @@ function invokeClaudeCode(
       if (timedOut) {
         promiseReject(new Error(`Claude Code CLI timed out after ${timeoutMs}ms`));
       } else if (code === 0) {
-        promiseResolve(stdout);
+        const { text, isError } = extractCliResult(stdout);
+        if (isError) {
+          promiseReject(new Error(`Claude Code CLI returned error result: ${text.substring(0, 300)}`));
+        } else {
+          promiseResolve(text);
+        }
       } else {
         promiseReject(
           new Error(`Claude Code CLI exited with code ${code}: ${stderr || stdout}`),
@@ -711,10 +801,45 @@ async function runVerification(
  * 변경사항을 커밋합니다.
  * 이미 커밋되어 있으면 기존 HEAD 해시를 반환합니다.
  */
+/**
+ * 이슈의 origin/카테고리 → FIX_RESULT_REGISTRATION.md §5 discovery_method 어휘.
+ * dashboard-reporter.resolveDiscoveryMethod와 동일 매핑 (commit footer용).
+ */
+function discoveryMethodFor(issue: ParsedIssue): string {
+  if (issue.category === 'tech-adoption') return 'tech_adoption_proposal';
+  if (issue.origin === 'qa-static') return 'static_analysis';
+  return 'scheduled_scan';
+}
+
+/** commit footer 값 정제 — 모델 출력이 셸/커밋 메시지를 깨지 않도록 안전 문자만 허용 */
+function sanitizeFooterValue(value: string): string {
+  return value.replace(/[^\w\sㄱ-ㅎ가-힣.,/#&()[\]:+-]/g, '').trim().substring(0, 200);
+}
+
+/**
+ * FIX-REPORT → ERROR_TAXONOMY 표준 footer 라인 생성.
+ * 대상 repo의 register-fix-to-dashboard.yml 워크플로가 이 footer를 파싱해
+ * QA Dashboard /api/fix-results에 등록한다 (FIX_RESULT_REGISTRATION.md).
+ */
+function buildErrorTaxonomyFooter(
+  fixReport: FixReport | undefined,
+  discoveryMethod: string,
+): string {
+  const lines = [`Discovery-Method: ${discoveryMethod}`];
+  if (fixReport?.rootCause) lines.push(`Root-Cause: ${sanitizeFooterValue(fixReport.rootCause)}`);
+  if (fixReport?.errorCategory) lines.push(`Error-Category: ${sanitizeFooterValue(fixReport.errorCategory)}`);
+  if (fixReport?.affectedLayer) lines.push(`Affected-Layer: ${sanitizeFooterValue(fixReport.affectedLayer)}`);
+  lines.push('Recurrence: first');
+  if (fixReport?.prevention) lines.push(`Prevention: ${sanitizeFooterValue(fixReport.prevention)}`);
+  return lines.join('\n');
+}
+
 async function commitChanges(
   issueNumber: number,
   title: string,
   cwd: string,
+  fixReport?: FixReport,
+  discoveryMethod = 'scheduled_scan',
 ): Promise<string | undefined> {
   const { stdout: status } = await execAsync('git status --porcelain', { cwd });
 
@@ -732,14 +857,19 @@ async function commitChanges(
 
   const slug = toBranchSlug(title);
   // 커밋 메시지: COMMIT_CONVENTION 표준 준수
-  // type(scope): subject + fixes #N in footer
+  // type(scope): subject + fixes #N + ERROR_TAXONOMY footer
   const scope = extractCommitScope(title);
   const subject = slug.replace(/-/g, ' ');
+  const summaryLine = fixReport?.summary
+    ? `\n${sanitizeFooterValue(fixReport.summary)}\n`
+    : '';
   const commitMsg = `fix(${scope}): ${subject}
 
-Auto-fixed by Auto-Tobe-Agent
+Auto-fixed by Auto-Tobe-Agent${summaryLine}
 
 fixes #${issueNumber}
+
+${buildErrorTaxonomyFooter(fixReport, discoveryMethod)}
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`;
 
@@ -946,6 +1076,14 @@ export async function orchestrateFix(
       const claudeOutput = await invokeClaudeCode(prompt, cwd, timeoutMs, allowedTools);
       console.log(`  Claude response: ${claudeOutput.substring(0, 200)}...`);
 
+      // 3.5 FIX-REPORT 구조화 블록 파싱 → 커밋 footer(ERROR_TAXONOMY) 생성에 사용 (C-2)
+      result.fixReport = parseFixReport(claudeOutput);
+      if (result.fixReport) {
+        console.log(`  FIX-REPORT: rootCause=${result.fixReport.rootCause ?? '?'}, layer=${result.fixReport.affectedLayer ?? '?'}`);
+      } else {
+        console.log('  WARN: FIX-REPORT 블록 없음 — 커밋 footer는 Discovery-Method만 포함');
+      }
+
       result.status = 'fix_applied';
 
       // 4. 수정된 파일 감지
@@ -1011,7 +1149,9 @@ export async function orchestrateFix(
           // PR-first 전략: 빌드 실패해도 수정 파일이 있으면 PR 생성 (CI에 위임)
           if (modifiedFiles.length > 0 && policy.auto_pr) {
             console.log('  PR-first: 빌드 실패하지만 PR 생성 후 CI에 검증 위임');
-            const commitHash = await commitChanges(issue.number, issue.title, cwd);
+            const commitHash = await commitChanges(
+              issue.number, issue.title, cwd, result.fixReport, discoveryMethodFor(issue),
+            );
             result.commitHash = commitHash;
             result.status = 'build_failed_ci_pending';
             result.error = `Build failed locally — CI verification required: ${buildResult.error?.substring(0, 200)}`;
@@ -1059,8 +1199,10 @@ export async function orchestrateFix(
         result.status = 'test_verified';
       }
 
-      // 7. 커밋
-      const commitHash = await commitChanges(issue.number, issue.title, cwd);
+      // 7. 커밋 — FIX-REPORT 기반 ERROR_TAXONOMY footer 포함
+      const commitHash = await commitChanges(
+        issue.number, issue.title, cwd, result.fixReport, discoveryMethodFor(issue),
+      );
       result.commitHash = commitHash;
 
       console.log(`  Commit: ${commitHash?.substring(0, 8)}`);

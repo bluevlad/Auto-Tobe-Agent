@@ -35,6 +35,24 @@ export interface VerificationResult {
   durationMs: number;
 }
 
+/**
+ * Claude Code CLI가 수정 완료 후 출력하는 FIX-REPORT 구조화 블록.
+ * commit footer(ERROR_TAXONOMY 표준) 자동 생성에 사용 —
+ * 대상 repo의 register-fix-to-dashboard.yml 워크플로가 footer를 파싱한다.
+ */
+export interface FixReport {
+  /** 수정 요약 한 줄 */
+  summary?: string;
+  /** Root-Cause 분류 (예: import-error, async-handling, type-mismatch) */
+  rootCause?: string;
+  /** Error-Category 분류 (예: logic-error, compat-issue, config-error) */
+  errorCategory?: string;
+  /** Affected-Layer (예: backend/api, frontend/component) */
+  affectedLayer?: string;
+  /** 재발 방지책 한 줄 */
+  prevention?: string;
+}
+
 /** 파일 수준 충돌 감지 결과 */
 export interface FileConflictInfo {
   conflictingFiles: string[];
@@ -71,6 +89,8 @@ export interface FixResult {
   origin?: IssueOrigin;
   /** 사람 승인 필수 이슈 — PR을 draft + needs-human-review로 생성 */
   humanApprovalRequired?: boolean;
+  /** CLI 출력에서 파싱한 FIX-REPORT (commit footer 생성에 사용) */
+  fixReport?: FixReport;
 }
 
 /** Pre-flight 충돌 검증 결과 */

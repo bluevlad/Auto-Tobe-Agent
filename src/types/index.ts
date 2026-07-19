@@ -32,6 +32,7 @@ export type {
   VerificationResult,
   ConflictCheckResult,
   FileConflictInfo,
+  FixReport,
   FixResult,
   BatchFixResult,
 } from './fix-result.js';
