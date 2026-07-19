@@ -43,7 +43,7 @@ npm run dev          # 개발 모드 (watch)
 | 모듈 | 역할 | Phase |
 |------|------|-------|
 | `index.ts` | 메인 엔트리포인트 (CLI) | 1 |
-| `issue-parser.ts` | GitHub Issue 파싱 (QA-AGENT-META + TECH-ADOPTION-META, source 라벨 분기) | 2 |
+| `issue-parser.ts` | GitHub Issue 파싱 (QA-AGENT-META + TECH-ADOPTION-META, source 라벨 분기, W6 origin/게이트 라벨) | 2 |
 | `project-resolver.ts` | 프로젝트 경로/설정 매핑 | 2 |
 | `fix-orchestrator.ts` | 수정 워크플로우 오케스트레이션 (tech-adoption 안전장치 §1.5 포함) | 3 |
 | `pr-creator.ts` | PR 생성 (tech-adoption 강제 draft + needs-human-review 라벨) | 3 |
@@ -63,6 +63,9 @@ npm run dev          # 개발 모드 (watch)
 |------|--------|----------|----------|
 | `source/qa-agent` (default) | Autonomous-QA-Agent | security/performance/... | 우선순위 기반 자동 fix + (P2/P3) auto-merge |
 | `source/tech-adoption` | medium-digest-agent | `tech-adoption` | 항상 **draft PR + needs-human-review** + 변경 범위 화이트리스트 |
+
+**W6 게이트 라벨 (2026-07-19~)**: QA Agent가 `origin:*` 라벨(qa-runtime/qa-static/qa-external-tech/qa-rag-quality/qa-improvement)을 붙이는 신형 이슈는 게이트를 따름 —
+`auto-fix` 라벨이 있어야 자동 처리, `human-approval-required`(또는 origin이 qa-external-tech/qa-rag-quality)면 수정 후 **draft PR + needs-human-review**. origin 라벨이 없는 구형 이슈는 기존 동작 유지.
 
 > tech-adoption 채널의 end-to-end 흐름과 안전장치 7계층은 [`Claude-Opus-bluevlad/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md`](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md) 참조.
 
@@ -111,12 +114,13 @@ npm run dev          # 개발 모드 (watch)
 |----------|------|------|
 | Autonomous-QA-Agent | QA Inspector (이슈 발견) | C:/GIT/Autonomous-QA-Agent |
 | Claude-Opus-bluevlad | 표준/규칙 Hub | C:/GIT/Claude-Opus-bluevlad |
-| hopenvision | **자동 수정 대상 (단일 집중)** — React 전용, Java는 별도 에이전트 | C:/GIT/hopenvision |
-| AllergyInsight | 자동 수정 대상 (full-stack) — **현재 비활성** | C:/GIT/AllergyInsight |
-| NewsLetterPlatform | 자동 수정 대상 (full-stack) — **현재 비활성** | C:/GIT/NewsLetterPlatform |
+| AllergyInsight | **자동 수정 대상** (full-stack) | C:/GIT/AllergyInsight |
+| SkillRadar | **자동 수정 대상** (full-stack) — 2026-07-19 신규 편입 | C:/GIT/skillradar |
+| NewsLetterPlatform | **자동 수정 대상** (full-stack) — SQLite→PG 마이그레이션 진행 중 주의 | C:/GIT/NewsLetterPlatform |
+| hopenvision | React 전용 — **현재 비활성** (2026-07-19 QA 개선 루프에서 제외) | C:/GIT/hopenvision |
 
-> **현재 단계 (2026-05-01~): hopenvision-only 집중**.
-> baseline 메트릭 수집 + PR-blocking 환경 이슈(`spawn /bin/sh ENOENT`) 해소가 끝날 때까지 다른 프로젝트는 `enabled: false`. 재개 시 `configs/projects.json`에서 다시 `true`로 되돌리면 됨.
+> **현재 단계 (2026-07-19~): 3-프로젝트 집중 (AllergyInsight / SkillRadar / NewsLetterPlatform)**.
+> QA Inspector(Autonomous-QA-Agent) 점검 대상과 동기화됨. hopenvision은 `enabled: false`로 루프에서 분리 — 재개 시 `configs/projects.json`에서 `true`로 되돌리면 됨.
 > 제외 이력: academy-admin (hopenvision으로 통합), EduFit (서비스 종료), unmong-main / StandUp (현재 미대상).
 
 ## 참조 표준 (모두 Claude-Opus-bluevlad)

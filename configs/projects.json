@@ -130,9 +130,9 @@
         }
       },
       "qa_agent_project": "hopenvision",
-      "enabled": true,
+      "enabled": false,
       "scope": "frontend-only",
-      "notes": "공무원 시험 채점 시스템 - Java 17, Spring Boot 3.2.2, React 19, TypeScript 5.9, PostgreSQL 16. 이 에이전트는 web-admin/ (React) 이슈만 처리 — Java 백엔드는 별도 Java 에이전트 담당."
+      "notes": "공무원 시험 채점 시스템 - Java 17, Spring Boot 3.2.2, React 19, TypeScript 5.9, PostgreSQL 16. 이 에이전트는 web-admin/ (React) 이슈만 처리 — Java 백엔드는 별도 Java 에이전트 담당. [2026-07-19 비활성: QA 개선 루프 대상을 AllergyInsight/SkillRadar/NewsLetterPlatform 3개로 재편]"
     },
     "allergyinsight": {
       "repo": "bluevlad/AllergyInsight",
@@ -262,9 +262,149 @@
         }
       },
       "qa_agent_project": "allergyinsight",
-      "enabled": false,
+      "enabled": true,
       "scope": "full-stack",
-      "notes": "알러지 연구 논문 검색/분석 플랫폼. Python 3.10+ FastAPI + React 18 (JS) + PostgreSQL + ChromaDB. 별도 Python 전용 에이전트 미존재 → 이 에이전트가 백엔드+프론트 전체 담당. [Phase: hopenvision-only 집중 기간 동안 비활성화 — 2026-05-01]"
+      "notes": "알러지 연구 논문 검색/분석 플랫폼. Python 3.10+ FastAPI + React 18 (JS) + PostgreSQL + ChromaDB. 별도 Python 전용 에이전트 미존재 → 이 에이전트가 백엔드+프론트 전체 담당. [2026-07-19 재활성: 3-프로젝트 집중 운영]"
+    },
+    "skillradar": {
+      "repo": "bluevlad/SkillRadar",
+      "local_path": "${HOME}/GIT/skillradar",
+      "tech_stack": {
+        "backend": "python-fastapi",
+        "frontend": "react-typescript",
+        "database": "postgresql",
+        "build_tool": "pip+vite",
+        "language": "python+typescript"
+      },
+      "main_branch": "main",
+      "deploy_branch": "prod",
+      "docker_compose": {
+        "local": "docker-compose.yml",
+        "production": "docker-compose.yml"
+      },
+      "commands": {
+        "build_backend": "pip install -r requirements.txt",
+        "build_frontend": "npm run build",
+        "build_frontend_cwd": "web-user/",
+        "lint_frontend": "npm run lint",
+        "lint_frontend_cwd": "web-user/"
+      },
+      "ports": {
+        "frontend": 4070,
+        "admin": 4071,
+        "backend": 9070
+      },
+      "urls": {
+        "frontend": "http://localhost:4070",
+        "admin": "http://localhost:4071",
+        "backend": "http://localhost:9070",
+        "health": "http://localhost:9070/api/v1/health"
+      },
+      "project_structure": {
+        "backend_root": "app/",
+        "frontend_root": "web-user/",
+        "source_main": "app/",
+        "frontend_src": "web-user/src/"
+      },
+      "docker": {
+        "compose_file": "docker-compose.yml",
+        "services": {
+          "api": {
+            "container_name": "skillradar-api",
+            "health_check": {
+              "type": "http",
+              "endpoint": "/api/v1/health",
+              "port": 9070,
+              "interval_seconds": 600,
+              "timeout_seconds": 10,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": [
+                "Traceback",
+                "ERROR",
+                "Connection refused",
+                "OperationalError"
+              ],
+              "warning": ["WARNING", "job missed", "slow query"]
+            },
+            "resource_limits": {
+              "cpu_percent": 80,
+              "memory_mb": 1536,
+              "disk_percent": 85
+            },
+            "deploy": {
+              "build_context": ".",
+              "dockerfile": "Dockerfile",
+              "rollback_on_failure": true,
+              "health_wait_seconds": 60
+            }
+          },
+          "web-user": {
+            "container_name": "skillradar-web-user",
+            "health_check": {
+              "type": "http",
+              "endpoint": "/",
+              "port": 4070,
+              "interval_seconds": 600,
+              "timeout_seconds": 5,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": ["Error", "ECONNREFUSED"],
+              "warning": ["WARN"]
+            },
+            "resource_limits": {
+              "cpu_percent": 60,
+              "memory_mb": 512,
+              "disk_percent": 85
+            }
+          },
+          "web-admin": {
+            "container_name": "skillradar-web-admin",
+            "health_check": {
+              "type": "http",
+              "endpoint": "/",
+              "port": 4071,
+              "interval_seconds": 600,
+              "timeout_seconds": 5,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 3
+            },
+            "log_patterns": {
+              "error": ["Error", "ECONNREFUSED"],
+              "warning": ["WARN"]
+            },
+            "resource_limits": {
+              "cpu_percent": 60,
+              "memory_mb": 512,
+              "disk_percent": 85
+            }
+          },
+          "db": {
+            "container_name": "skillradar-db",
+            "health_check": {
+              "type": "exec",
+              "command": "pg_isready -U postgres",
+              "interval_seconds": 300,
+              "timeout_seconds": 5,
+              "healthy_threshold": 1,
+              "unhealthy_threshold": 2
+            },
+            "resource_limits": {
+              "cpu_percent": 70,
+              "memory_mb": 2048,
+              "disk_percent": 80
+            }
+          }
+        }
+      },
+      "qa_agent_project": "skillradar",
+      "enabled": true,
+      "scope": "full-stack",
+      "notes": "AI 학습 정보 큐레이션 서비스 (취준생/시니어). Python 3.11+ FastAPI + SQLAlchemy 2.0 + PostgreSQL 16/pgvector + Ollama 로컬 LLM + React 19/TS (web-user/web-admin). pytest 테스트 미구축 상태 — test_backend 명령 없음. [2026-07-19 신규 편입]"
     },
     "newsletterplatform": {
       "repo": "bluevlad/NewsLetterPlatform",
@@ -351,9 +491,9 @@
         }
       },
       "qa_agent_project": "newsletterplatform",
-      "enabled": false,
+      "enabled": true,
       "scope": "full-stack",
-      "notes": "멀티테넌트 뉴스레터 플랫폼 (AllergyInsight 발송 등). Python 3.12+ FastAPI + APScheduler + SQLite + Jinja2. 프론트엔드 분리 없음 (서버 사이드 렌더링) — Python 전체를 이 에이전트가 담당. [Phase: hopenvision-only 집중 기간 동안 비활성화 — 2026-05-01]"
+      "notes": "멀티테넌트 뉴스레터 플랫폼 (AllergyInsight 발송 등). Python 3.12+ FastAPI + APScheduler + SQLite + Jinja2. 프론트엔드 분리 없음 (서버 사이드 렌더링) — Python 전체를 이 에이전트가 담당. [2026-07-19 재활성: 3-프로젝트 집중 운영. 주의: SQLite→PostgreSQL 마이그레이션 진행 중 — DB 관련 이슈는 보수적으로 처리]"
     }
   }
 }
