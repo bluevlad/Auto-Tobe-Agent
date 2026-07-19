@@ -3,6 +3,7 @@ export type {
   IssueCategory,
   FixStrategy,
   IssueSource,
+  IssueOrigin,
   FixSource,
   DiscoveryMethod,
   ChangeScope,

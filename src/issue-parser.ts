@@ -6,6 +6,7 @@ import type {
   Priority,
   IssueCategory,
   IssueSource,
+  IssueOrigin,
   QaAgentMeta,
   TechAdoptionMeta,
 } from './types/index.js';
@@ -149,6 +150,32 @@ function extractSource(labels: string[]): IssueSource {
     return 'tech-adoption';
   }
   return 'qa-agent';
+}
+
+const VALID_ORIGINS: IssueOrigin[] = [
+  'qa-runtime',
+  'qa-static',
+  'qa-external-tech',
+  'qa-rag-quality',
+  'qa-improvement',
+];
+
+/** 사람 승인이 필수인 origin 트랙 (QA_ISSUE_TAXONOMY §2.1 게이트 규칙과 동일) */
+const HUMAN_APPROVAL_ORIGINS: IssueOrigin[] = ['qa-external-tech', 'qa-rag-quality'];
+
+/**
+ * W6+ origin 트랙을 추출합니다 — 라벨 `origin:*` 우선, 없으면 QA-AGENT-META.origin.
+ * 구형 이슈(W6 이전)는 undefined.
+ */
+function extractOrigin(labels: string[], meta?: QaAgentMeta): IssueOrigin | undefined {
+  for (const label of labels) {
+    if (label.startsWith('origin:')) {
+      const value = label.slice('origin:'.length) as IssueOrigin;
+      if (VALID_ORIGINS.includes(value)) return value;
+    }
+  }
+  if (meta?.origin && VALID_ORIGINS.includes(meta.origin)) return meta.origin;
+  return undefined;
 }
 
 /**
@@ -328,6 +355,13 @@ export async function parseIssue(
       source === 'tech-adoption' ? 'tech-adoption' : (meta?.category ?? category);
     const resolvedPriority = techAdoptionMeta?.priority ?? meta?.priority ?? priority;
 
+    // W6+ 게이트 라벨 — origin 트랙과 auto-fix/human-approval-required 처리 게이트
+    const origin = source === 'qa-agent' ? extractOrigin(labels, meta) : undefined;
+    const autoFixApproved = labels.includes('auto-fix');
+    const humanApprovalRequired =
+      labels.includes('human-approval-required') ||
+      (origin !== undefined && HUMAN_APPROVAL_ORIGINS.includes(origin));
+
     return {
       number: issue.number,
       title: issue.title,
@@ -338,6 +372,9 @@ export async function parseIssue(
       priority: resolvedPriority,
       category: resolvedCategory,
       source,
+      origin,
+      autoFixApproved,
+      humanApprovalRequired,
       meta,
       techAdoptionMeta,
       parsedContent,

@@ -501,6 +501,31 @@ async function createFixBranch(
 }
 
 /**
+ * 프로젝트 tech_stack 기반으로 Claude Code CLI allowedTools를 구성합니다.
+ *
+ * 기존에는 npm/gradle만 하드코딩되어 Python 프로젝트(pytest/pip)의 검증 명령을
+ * 실행할 수 없었음 — 스택 문자열을 느슨하게 매칭해 프로젝트별로 구성 (2026-07-19).
+ */
+function buildAllowedTools(project: ResolvedProject): string[] {
+  const tools = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash(git:*)'];
+  const stack = project.config.tech_stack;
+  const stackText = [
+    stack.backend, stack.frontend, stack.build_tool, stack.language ?? '',
+  ].join(' ').toLowerCase();
+
+  if (/react|vue|npm|vite|node|typescript|javascript/.test(stackText)) {
+    tools.push('Bash(npm:*)', 'Bash(npx:*)');
+  }
+  if (/java|gradle|maven/.test(stackText)) {
+    tools.push('Bash(./gradlew:*)', 'Bash(gradle:*)');
+  }
+  if (/python|pip|fastapi/.test(stackText)) {
+    tools.push('Bash(python:*)', 'Bash(python3:*)', 'Bash(pytest:*)', 'Bash(pip:*)', 'Bash(pip3:*)', 'Bash(alembic:*)');
+  }
+  return tools;
+}
+
+/**
  * Claude Code CLI를 호출하여 코드를 수정합니다.
  * spawn으로 프롬프트를 stdin에 전달하여 인자 길이 제한을 회피합니다.
  */
@@ -508,13 +533,9 @@ function invokeClaudeCode(
   prompt: string,
   cwd: string,
   timeoutMs: number,
+  allowedTools: string[],
 ): Promise<string> {
   return new Promise((promiseResolve, promiseReject) => {
-    const allowedTools = [
-      'Read', 'Edit', 'Write', 'Glob', 'Grep',
-      'Bash(git:*)', 'Bash(npm:*)', 'Bash(npx:*)',
-      'Bash(./gradlew:*)', 'Bash(gradle:*)',
-    ];
     const claudePath = resolveClaudeCliPath();
     const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
     const sep = process.platform === 'win32' ? ';' : ':';
@@ -769,6 +790,8 @@ function createInitialResult(
     startedAt: new Date().toISOString(),
     retryCount: 0,
     sourceRunId: issue.sourceRunId,
+    origin: issue.origin,
+    humanApprovalRequired: issue.humanApprovalRequired,
   };
 }
 
@@ -811,6 +834,21 @@ export async function orchestrateFix(
     result.error = 'Issue marked as not auto-fixable';
     result.completedAt = new Date().toISOString();
     return result;
+  }
+
+  // 1.2 W6 게이트 라벨 — origin 라벨이 있는 신형 QA 이슈는 Inspector의 게이트 판정을 따름:
+  //   - human-approval-required → 수정 시도는 하되 PR은 draft + needs-human-review (§pr-creator)
+  //   - auto-fix 라벨 없음 → 자동 처리 대상 아님 (Inspector가 승인하지 않은 이슈)
+  //   구형 이슈(origin 없음)는 기존 동작 유지.
+  if (issue.source === 'qa-agent' && issue.origin && !issue.humanApprovalRequired && !issue.autoFixApproved) {
+    console.log(`  SKIP: origin=${issue.origin} 이슈에 auto-fix 게이트 라벨 없음 (Inspector 미승인)`);
+    result.status = 'skipped';
+    result.error = `W6 gate: origin:${issue.origin} issue without auto-fix label`;
+    result.completedAt = new Date().toISOString();
+    return result;
+  }
+  if (issue.humanApprovalRequired) {
+    console.log(`  NOTE: human-approval-required — 수정 후 draft PR로 생성 (origin=${issue.origin ?? 'n/a'})`);
   }
 
   if (!policy.auto_fix) {
@@ -901,10 +939,11 @@ export async function orchestrateFix(
       // 브랜치 생성
       await createFixBranch(branchName, mainBranch, cwd);
 
-      // 3. Claude Code CLI 호출
+      // 3. Claude Code CLI 호출 — allowedTools는 프로젝트 tech_stack 기반 구성
       console.log('  Invoking Claude Code CLI...');
       const prompt = buildFixPrompt(issue, project);
-      const claudeOutput = await invokeClaudeCode(prompt, cwd, timeoutMs);
+      const allowedTools = buildAllowedTools(project);
+      const claudeOutput = await invokeClaudeCode(prompt, cwd, timeoutMs, allowedTools);
       console.log(`  Claude response: ${claudeOutput.substring(0, 200)}...`);
 
       result.status = 'fix_applied';

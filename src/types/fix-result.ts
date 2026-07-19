@@ -1,4 +1,4 @@
-import type { Priority, IssueCategory, FixStrategy } from './issue.js';
+import type { Priority, IssueCategory, FixStrategy, IssueOrigin } from './issue.js';
 
 /** 수정 상태 */
 export type FixStatus =
@@ -67,6 +67,10 @@ export interface FixResult {
   sourceRunId?: string;
   /** 중복 이슈 필터링용 정규화된 키 */
   deduplicationKey?: string;
+  /** W6+ origin 트랙 — PR 라벨/draft 분기용 */
+  origin?: IssueOrigin;
+  /** 사람 승인 필수 이슈 — PR을 draft + needs-human-review로 생성 */
+  humanApprovalRequired?: boolean;
 }
 
 /** Pre-flight 충돌 검증 결과 */

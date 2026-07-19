@@ -19,6 +19,17 @@ export type FixStrategy = 'claude-code-cli' | 'template-based' | 'tech-adoption-
 export type IssueSource = 'qa-agent' | 'tech-adoption';
 
 /**
+ * QA Agent W6 origin 트랙 — 라벨 `origin:*` 또는 QA-AGENT-META의 origin 필드.
+ * 표준: Claude-Opus-bluevlad/standards/qa/QA_ISSUE_TAXONOMY.md §2.1
+ */
+export type IssueOrigin =
+  | 'qa-runtime'
+  | 'qa-static'
+  | 'qa-external-tech'
+  | 'qa-rag-quality'
+  | 'qa-improvement';
+
+/**
  * fix 결과 등록 시 사용되는 분류 어휘 — Claude-Opus-bluevlad/standards/qa/FIX_RESULT_REGISTRATION.md 와 동일 사전.
  */
 export type FixSource = 'agent' | 'developer';
@@ -65,6 +76,8 @@ export interface QaAgentMeta {
   runId?: string;
   /** 수정 대상 분류: service-code(백엔드), test-code(테스트), unknown */
   fix_category?: FixCategory;
+  /** W6+ origin 트랙 (qa-runtime/qa-static/qa-external-tech/qa-rag-quality/qa-improvement) */
+  origin?: IssueOrigin;
 }
 
 /** 변경 범위 — tech-adoption 자동 적용 시 화이트리스트로 사용 */
@@ -124,6 +137,15 @@ export interface ParsedIssue {
   category: IssueCategory;
   /** 이슈 출처 채널 — 라벨 source/* 또는 카테고리에서 결정 */
   source: IssueSource;
+  /** W6+ origin 트랙 — 라벨 origin:* 우선, 없으면 QA-AGENT-META.origin (구형 이슈는 undefined) */
+  origin?: IssueOrigin;
+  /**
+   * QA Agent 게이트 라벨 `auto-fix` 존재 여부 — Inspector가 자동 처리를 승인한 이슈
+   * (service-bug + P2/P3만 부여). origin 라벨이 있는 신형 이슈에서만 게이트로 사용.
+   */
+  autoFixApproved: boolean;
+  /** 게이트 라벨 `human-approval-required` 또는 origin이 사람 승인 필수 트랙인 경우 true */
+  humanApprovalRequired: boolean;
   /** QA-AGENT-META (있는 경우) */
   meta?: QaAgentMeta;
   /** TECH-ADOPTION-META (source가 tech-adoption인 경우) */

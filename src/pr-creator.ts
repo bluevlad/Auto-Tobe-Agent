@@ -290,28 +290,36 @@ export async function createPullRequest(
     console.log(`  Pushing ${fixResult.branchName}...`);
     await pushBranch(fixResult.branchName, cwd);
 
-    // 4. PR 생성 (파일 충돌 또는 tech-adoption 카테고리 시 draft로 생성)
+    // 4. PR 생성 (파일 충돌 / tech-adoption / human-approval-required 시 draft로 생성)
     const hasFileConflicts = fixResult.fileConflicts != null
       && fixResult.fileConflicts.conflictingFiles.length > 0;
     const isTechAdoption = fixResult.category === 'tech-adoption';
-    const draftMode = hasFileConflicts || isTechAdoption;
+    const needsHumanApproval = fixResult.humanApprovalRequired === true;
+    const draftMode = hasFileConflicts || isTechAdoption || needsHumanApproval;
 
     const title = buildPrTitle(fixResult);
     const body = buildPrBody(fixResult);
     // tech-adoption은 자동 머지 차단을 위해 항상 reviewer 지정 (default_reviewers 사용)
     const reviewers = policy.required_reviewers.length > 0
       ? policy.required_reviewers
-      : (isTechAdoption ? policyConfig.default_reviewers : policyConfig.default_reviewers);
+      : policyConfig.default_reviewers;
     const labels = [`${fixResult.priority}`, fixResult.category, 'auto-fix'];
+    if (fixResult.origin) {
+      labels.push(`origin:${fixResult.origin}`);
+    }
     if (isCiPending) {
       labels.push('needs-ci-verification');
     }
-    if (isTechAdoption) {
+    if (isTechAdoption || needsHumanApproval) {
       labels.push('needs-human-review');
     }
 
     if (draftMode) {
-      const reason = isTechAdoption ? 'tech-adoption (사람 리뷰 필수)' : '파일 충돌 감지됨';
+      const reason = isTechAdoption
+        ? 'tech-adoption (사람 리뷰 필수)'
+        : needsHumanApproval
+          ? `human-approval-required (origin=${fixResult.origin ?? 'n/a'})`
+          : '파일 충돌 감지됨';
       console.log(`  Creating DRAFT PR (${reason}): ${title}`);
     } else {
       console.log(`  Creating PR: ${title}`);
