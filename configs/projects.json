@@ -387,7 +387,7 @@
             "container_name": "skillradar-db",
             "health_check": {
               "type": "exec",
-              "command": "pg_isready -U postgres",
+              "command": "pg_isready -U skillradar",
               "interval_seconds": 300,
               "timeout_seconds": 5,
               "healthy_threshold": 1,
