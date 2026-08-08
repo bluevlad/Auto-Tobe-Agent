@@ -43,6 +43,7 @@ import { correlateMonitorResult, createDockerGitHubIssues } from './issue-correl
 import { processDeployQueue, checkMergedPRsAndEnqueue } from './docker-deployer.js';
 import { executeRoundRobinBatch, checkScheduleAdjustment } from './round-robin-scheduler.js';
 import { flushPendingReports } from './dashboard-reporter.js';
+import { LLMOpsClient } from './observability/llmops.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -360,6 +361,12 @@ async function runBatch(projectName?: string): Promise<void> {
   console.log(`  Started: ${timestamp}`);
   console.log('='.repeat(50));
 
+  // LLMOps 보고용 (consumer_id 는 service-registry 의 llm_consumers[].id 와 일치)
+  const llmops = new LLMOpsClient({ consumerId: 'auto-tobe-agent-b' });
+  const llmopsStarted = new Date(timestamp);
+  const llmopsRunId = `${timestamp}-${process.pid}`;
+  const t0 = Date.now();
+
   // Dashboard 전송 실패 큐 재전송
   const flushResult = await flushPendingReports();
   if (flushResult.sent > 0 || flushResult.failed > 0) {
@@ -388,22 +395,56 @@ async function runBatch(projectName?: string): Promise<void> {
 
   if (useRoundRobin && scheduleConfig) {
     console.log(`  Mode: Round-Robin (${targetProjects.length} projects)`);
-    const result = await executeRoundRobinBatch(targetProjects, scheduleConfig);
+    try {
+      const result = await executeRoundRobinBatch(targetProjects, scheduleConfig);
 
-    // Round-Robin 결과 요약
-    console.log('\n' + '='.repeat(50));
-    console.log('BATCH SUMMARY (Round-Robin)');
-    console.log('='.repeat(50));
-    console.log(`  Processed: ${result.totalProcessed}`);
-    console.log(`  Succeeded: ${result.succeeded}`);
-    console.log(`  Failed: ${result.failed}`);
-    console.log(`  Skipped: ${result.skipped}`);
-    console.log(`  Timed out: ${result.timedOut ? 'YES' : 'no'}`);
-    console.log(`  Duration: ${(result.totalDurationMs / 1000).toFixed(1)}s`);
-    for (const [proj, stats] of Object.entries(result.perProject)) {
-      console.log(`  [${proj}] processed: ${stats.processed}, ok: ${stats.succeeded}, fail: ${stats.failed}`);
+      // Round-Robin 결과 요약
+      console.log('\n' + '='.repeat(50));
+      console.log('BATCH SUMMARY (Round-Robin)');
+      console.log('='.repeat(50));
+      console.log(`  Processed: ${result.totalProcessed}`);
+      console.log(`  Succeeded: ${result.succeeded}`);
+      console.log(`  Failed: ${result.failed}`);
+      console.log(`  Skipped: ${result.skipped}`);
+      console.log(`  Timed out: ${result.timedOut ? 'YES' : 'no'}`);
+      console.log(`  Duration: ${(result.totalDurationMs / 1000).toFixed(1)}s`);
+      for (const [proj, stats] of Object.entries(result.perProject)) {
+        console.log(`  [${proj}] processed: ${stats.processed}, ok: ${stats.succeeded}, fail: ${stats.failed}`);
+      }
+      console.log(`  Completed: ${result.completedAt}`);
+
+      const llmopsStatus = result.failed > 0 ? 'partial' : 'success';
+      llmops.report({
+        runId: llmopsRunId,
+        startedAt: llmopsStarted,
+        endedAt: new Date(),
+        status: llmopsStatus,
+        stages: [{ name: 'claude_fix_batch', model: 'claude-cli', durationMs: Date.now() - t0 }],
+        metrics: {
+          mode: 'round-robin',
+          totalProcessed: result.totalProcessed,
+          succeeded: result.succeeded,
+          failed: result.failed,
+          skipped: result.skipped,
+          timedOut: result.timedOut ? 1 : 0,
+          projectCount: targetProjects.length,
+        },
+        extra: { perProject: result.perProject },
+      });
+    } catch (err) {
+      const e = err as Error;
+      llmops.report({
+        runId: llmopsRunId,
+        startedAt: llmopsStarted,
+        endedAt: new Date(),
+        status: 'failure',
+        error: { type: e.name || 'Error', message: (e.message || String(e)).slice(0, 500) },
+        extra: { mode: 'round-robin' },
+      });
+      throw err;
+    } finally {
+      await LLMOpsClient.flush(2000);
     }
-    console.log(`  Completed: ${result.completedAt}`);
     return;
   }
 
@@ -523,6 +564,24 @@ async function runBatch(projectName?: string): Promise<void> {
   console.log(`  Failed: ${totalFailed}`);
   console.log(`  Skipped (already done): ${totalSkipped}`);
   console.log(`  Completed: ${new Date().toISOString()}`);
+
+  const seqStatus = totalFailed > 0 ? 'partial' : 'success';
+  llmops.report({
+    runId: llmopsRunId,
+    startedAt: llmopsStarted,
+    endedAt: new Date(),
+    status: seqStatus,
+    stages: [{ name: 'claude_fix_batch', model: 'claude-cli', durationMs: Date.now() - t0 }],
+    metrics: {
+      mode: 'sequential',
+      totalProcessed,
+      succeeded: totalSuccess,
+      failed: totalFailed,
+      skipped: totalSkipped,
+      projectCount: targetProjects.length,
+    },
+  });
+  await LLMOpsClient.flush(2000);
 }
 
 /**
