@@ -152,8 +152,8 @@ Auto-Tobe-Agent/
 - [CLAUDE.md](CLAUDE.md) — 프로젝트 설정 및 아키텍처
 - [docs/README.md](docs/README.md) — 문서 목록 및 참조
 
-### 참조 표준 (Claude-Opus-bluevlad)
+### 참조 표준 (Ai-Legacy-bluevlad)
 
-- [AGENT_CONFLICT_PREVENTION_GUIDE.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/claude-code/AGENT_CONFLICT_PREVENTION_GUIDE.md) — Agent-Human 충돌 방지
-- [ISSUE_FIX_WORKFLOW.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/claude-code/ISSUE_FIX_WORKFLOW.md) — 이슈 수정 워크플로우
-- [COMMIT_CONVENTION.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/git/COMMIT_CONVENTION.md) — 커밋 메시지 규칙
+- [AGENT_CONFLICT_PREVENTION_GUIDE.md](https://github.com/bluevlad/Ai-Legacy-bluevlad/blob/main/standards/claude-code/AGENT_CONFLICT_PREVENTION_GUIDE.md) — Agent-Human 충돌 방지
+- [ISSUE_FIX_WORKFLOW.md](https://github.com/bluevlad/Ai-Legacy-bluevlad/blob/main/standards/claude-code/ISSUE_FIX_WORKFLOW.md) — 이슈 수정 워크플로우
+- [COMMIT_CONVENTION.md](https://github.com/bluevlad/Ai-Legacy-bluevlad/blob/main/standards/git/COMMIT_CONVENTION.md) — 커밋 메시지 규칙

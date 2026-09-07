@@ -20,7 +20,7 @@ export type IssueSource = 'qa-agent' | 'tech-adoption';
 
 /**
  * QA Agent W6 origin 트랙 — 라벨 `origin:*` 또는 QA-AGENT-META의 origin 필드.
- * 표준: Claude-Opus-bluevlad/standards/qa/QA_ISSUE_TAXONOMY.md §2.1
+ * 표준: Ai-Legacy-bluevlad/standards/qa/QA_ISSUE_TAXONOMY.md §2.1
  */
 export type IssueOrigin =
   | 'qa-runtime'
@@ -30,7 +30,7 @@ export type IssueOrigin =
   | 'qa-improvement';
 
 /**
- * fix 결과 등록 시 사용되는 분류 어휘 — Claude-Opus-bluevlad/standards/qa/FIX_RESULT_REGISTRATION.md 와 동일 사전.
+ * fix 결과 등록 시 사용되는 분류 어휘 — Ai-Legacy-bluevlad/standards/qa/FIX_RESULT_REGISTRATION.md 와 동일 사전.
  */
 export type FixSource = 'agent' | 'developer';
 

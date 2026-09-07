@@ -11,7 +11,7 @@
 - Docker 명령은 현재 호스트에서 바로 실행 (별도 SSH 접속 불필요)
 - compose 파일 선택: Darwin → `docker-compose.yml` / Windows → `docker-compose.local.yml`
 
-> 3-머신 작업 환경(MacBook 편집·운영 / Desktop 터미널·AutoQA / Notebook TIPAIP2 격리) 규칙: [WORKSTATION_GUIDE.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/infrastructure/environments/WORKSTATION_GUIDE.md) — 개인 서비스 편집은 MacBook 에서만, Desktop 은 pull-only
+> 3-머신 작업 환경(MacBook 편집·운영 / Desktop 터미널·AutoQA / Notebook TIPAIP2 격리) 규칙: [WORKSTATION_GUIDE.md](https://github.com/bluevlad/Ai-Legacy-bluevlad/blob/main/infrastructure/environments/WORKSTATION_GUIDE.md) — 개인 서비스 편집은 MacBook 에서만, Desktop 은 pull-only
 
 ## 프로젝트 개요
 
@@ -73,7 +73,7 @@ npm run dev          # 개발 모드 (watch)
 - 대상 repo에 `.claude/skills/fix-qa-issue/SKILL.md`가 있으면 `/fix-qa-issue` 호출로 프로젝트별 수정 규칙을 repo 쪽 스킬에서 로드 (3개 대상 repo에 배치 완료). 스킬 미배치 repo는 레거시 전체 프롬프트 fallback.
 - CLI는 `--output-format json`으로 호출하고, 응답의 `FIX-REPORT` 블록을 파싱해 fix 커밋에 **ERROR_TAXONOMY footer**(Discovery-Method/Root-Cause/Error-Category/Affected-Layer/Prevention)를 자동 생성 — 대상 repo의 `register-fix-to-dashboard.yml`이 이 footer를 파싱해 QA Dashboard에 등록.
 
-> tech-adoption 채널의 end-to-end 흐름과 안전장치 7계층은 [`Claude-Opus-bluevlad/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md`](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md) 참조.
+> tech-adoption 채널의 end-to-end 흐름과 안전장치 7계층은 [`Ai-Legacy-bluevlad/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md`](https://github.com/bluevlad/Ai-Legacy-bluevlad/blob/main/services/auto-tobe-agent/TECH_ADOPTION_CHANNEL.md) 참조.
 
 ### 설정 파일 (`configs/`)
 
@@ -119,7 +119,7 @@ npm run dev          # 개발 모드 (watch)
 | 프로젝트 | 역할 | 경로 |
 |----------|------|------|
 | Autonomous-QA-Agent | QA Inspector (이슈 발견) | C:/GIT/Autonomous-QA-Agent |
-| Claude-Opus-bluevlad | 표준/규칙 Hub | C:/GIT/Claude-Opus-bluevlad |
+| Ai-Legacy-bluevlad | 표준/규칙 Hub | C:/GIT/Ai-Legacy-bluevlad |
 | AllergyInsight | **자동 수정 대상** (full-stack) | C:/GIT/AllergyInsight |
 | SkillRadar | **자동 수정 대상** (full-stack) — 2026-07-19 신규 편입 | C:/GIT/skillradar |
 | NewsLetterPlatform | **자동 수정 대상** (full-stack) — SQLite→PG 마이그레이션 진행 중 주의 | C:/GIT/NewsLetterPlatform |
@@ -129,7 +129,7 @@ npm run dev          # 개발 모드 (watch)
 > QA Inspector(Autonomous-QA-Agent) 점검 대상과 동기화됨. hopenvision은 `enabled: false`로 루프에서 분리 — 재개 시 `configs/projects.json`에서 `true`로 되돌리면 됨.
 > 제외 이력: academy-admin (hopenvision으로 통합), EduFit (서비스 종료), unmong-main / StandUp (현재 미대상).
 
-## 참조 표준 (모두 Claude-Opus-bluevlad)
+## 참조 표준 (모두 Ai-Legacy-bluevlad)
 
 | 영역 | 파일 |
 |------|------|
@@ -144,7 +144,7 @@ npm run dev          # 개발 모드 (watch)
 
 ## Fix 커밋 오류 추적
 
-> 상세: [FIX_COMMIT_TRACKING_GUIDE.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/git/FIX_COMMIT_TRACKING_GUIDE.md) | [ERROR_TAXONOMY.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/standards/git/ERROR_TAXONOMY.md)
+> 상세: [FIX_COMMIT_TRACKING_GUIDE.md](https://github.com/bluevlad/Ai-Legacy-bluevlad/blob/main/standards/git/FIX_COMMIT_TRACKING_GUIDE.md) | [ERROR_TAXONOMY.md](https://github.com/bluevlad/Ai-Legacy-bluevlad/blob/main/standards/git/ERROR_TAXONOMY.md)
 
 `fix:` 커밋 시 footer에 오류 추적 메타데이터를 **필수** 포함합니다.
 

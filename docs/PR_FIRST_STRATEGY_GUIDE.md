@@ -2,7 +2,7 @@
 
 > 작성: 2026-03-23
 > 커밋: f29fa1a
-> 관련 제안: [AUTO_TOBE_AGENT_PROPOSAL.md](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/services/hopenvision/dev/AUTO_TOBE_AGENT_PROPOSAL.md)
+> 관련 제안: [AUTO_TOBE_AGENT_PROPOSAL.md](https://github.com/bluevlad/Ai-Legacy-bluevlad/blob/main/services/hopenvision/dev/AUTO_TOBE_AGENT_PROPOSAL.md)
 
 ---
 
@@ -232,4 +232,4 @@ Phase 1 완료 후, hopenvision Phase 1~2 merge를 대기하며 아래 항목 �
 | 5 | Frontend-only 빌드 분기 | `fix-orchestrator.ts` | (이번에 함께 구현 완료) |
 | 6 | 수정 범위 제한 | `projects.json` | hopenvision 패키지 경계 인식 |
 
-상세: [AUTO_TOBE_AGENT_PROPOSAL.md §6](https://github.com/bluevlad/Claude-Opus-bluevlad/blob/main/services/hopenvision/dev/AUTO_TOBE_AGENT_PROPOSAL.md#6-구현-로드맵)
+상세: [AUTO_TOBE_AGENT_PROPOSAL.md §6](https://github.com/bluevlad/Ai-Legacy-bluevlad/blob/main/services/hopenvision/dev/AUTO_TOBE_AGENT_PROPOSAL.md#6-구현-로드맵)

@@ -226,7 +226,7 @@ logs/
 | 문서 | 위치 | 설명 |
 |------|------|------|
 | CLAUDE.md | Auto-Tobe-Agent/ | 프로젝트 설정, 아키텍처, 설계 원칙 |
-| AGENT_CONFLICT_PREVENTION_GUIDE.md | Claude-Opus-bluevlad/standards/claude-code/ | Agent-Human 충돌 방지 전략 |
-| ISSUE_FIX_WORKFLOW.md | Claude-Opus-bluevlad/standards/claude-code/ | 이슈 수정 절차 표준 |
+| AGENT_CONFLICT_PREVENTION_GUIDE.md | Ai-Legacy-bluevlad/standards/claude-code/ | Agent-Human 충돌 방지 전략 |
+| ISSUE_FIX_WORKFLOW.md | Ai-Legacy-bluevlad/standards/claude-code/ | 이슈 수정 절차 표준 |
 | schedule.json | Auto-Tobe-Agent/configs/ | 3-Tier 스케줄 설정 |
 | approval-policy.json | Auto-Tobe-Agent/configs/ | 우선순위별 승인 정책 |

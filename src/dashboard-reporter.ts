@@ -82,7 +82,7 @@ function resolveEnvVar(value: string): string {
 /**
  * FixResult의 카테고리/origin에서 discovery_method를 결정합니다.
  *
- * Claude-Opus-bluevlad/standards/qa/FIX_RESULT_REGISTRATION.md §5 어휘 사전 사용.
+ * Ai-Legacy-bluevlad/standards/qa/FIX_RESULT_REGISTRATION.md §5 어휘 사전 사용.
  * - tech-adoption 카테고리 → tech_adoption_proposal (§5.3)
  * - origin:qa-static (W6 라벨) → static_analysis
  * - 그 외 (QA Agent 정기 점검 흐름) → scheduled_scan (§5.1)
