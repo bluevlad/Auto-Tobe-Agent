@@ -31,6 +31,11 @@ LOG_FILE="$LOG_DIR/batch-${DATE_TAG}-${TIME_TAG}.log"
 # --- PATH 보강 (launchd 환경에서 필요) ---
 export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:$PATH"
 
+# --- .env 로드 (LLMOPS_URL / LLMOPS_API_KEY 등 — gitignored) ---
+if [ -f "$AGENT_HOME/.env" ]; then
+  set -a; . "$AGENT_HOME/.env"; set +a
+fi
+
 # --- Java (Homebrew OpenJDK 21) ---
 if [ -z "${JAVA_HOME:-}" ] && [ -d "/opt/homebrew/opt/openjdk@21" ]; then
   export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
