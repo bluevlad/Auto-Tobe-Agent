@@ -31,6 +31,7 @@ import {
   recordResult,
 } from './fix-history.js';
 import { fetchOpenIssueNumbers, parseIssue, isParsedIssue, sortByPriority } from './issue-parser.js';
+import { markNeedsTriage } from './triage-labeler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -208,6 +209,11 @@ export async function executeRoundRobinBatch(
           }
         }
         parsed.push(result);
+      } else if (isParsedIssue(result)) {
+        // 자동 수정 불가 — 조용히 건너뛰지 않고 사람의 분류 대기열로 표시 (이슈당 1회)
+        if (await markNeedsTriage(result)) {
+          console.log(`  [${name}] #${item.number}: 자동 수정 불가 → needs-triage 표시`);
+        }
       }
     }
 
