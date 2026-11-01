@@ -56,6 +56,7 @@ npm run dev          # 개발 모드 (watch)
 | `issue-correlator.ts` | Docker 이슈 ↔ GitHub Issue 상관관계 | 8 |
 | `docker-deployer.ts` | Docker 빌드/배포/롤백 관리 | 9 |
 | `round-robin-scheduler.ts` | Multi-Service Round-Robin 배치 스케줄러 | 10 |
+| `triage-labeler.ts` | 자동 수정 불가 이슈에 `needs-triage` 라벨 + 사유 코멘트 (이슈당 1회) | 10 |
 
 ### 두 입력 채널
 
